@@ -14,7 +14,7 @@ async def hello(ctx: discord.ApplicationContext, name: Optional[str] = None):
     await ctx.respond(f"Hello {name}!")
 
 
-@bot.user_command(name="Say Hello")
+@bot.slash_command()
 async def hi(ctx: discord.ApplicationContext, user: discord.User):
     await ctx.respond(f"{ctx.author.mention} says hello to {user.name}!")
 
