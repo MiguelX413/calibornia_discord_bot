@@ -19,6 +19,14 @@ async def hi(ctx: discord.ApplicationContext, user: discord.User):
     await ctx.respond(f"{ctx.author.mention} says hello to {user.name}!")
 
 
+@bot.listen()
+async def on_message(message: discord.Message):
+    if bot.application_id == message.author.id:
+        return
+    if "vriska".casefold() in message.content.casefold():
+        await message.reply("<:vriska:1017263376361062490>")
+
+
 def run_bot(token: str) -> None:
     bot.run(token)
 
