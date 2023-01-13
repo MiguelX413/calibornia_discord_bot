@@ -9,6 +9,13 @@ GUILD = 980962249550213170
 
 MOD_ROLE = 1027089314405957685
 
+CHANNELS = {
+    "general": 980962249550213176,
+    "spam": 981995926883287142,
+}
+
+JOIN_LEAVE_MSG_CHANNEL = CHANNELS["general"]
+
 bot = discord.Bot(intents=discord.Intents.all())
 
 EMOJIS = {
@@ -54,7 +61,7 @@ async def on_message(message: discord.Message):
             ),
         )
     )
-    if message.channel.id in [981995926883287142]:
+    if message.channel.id in [CHANNELS["spam"]]:
         if len(emojis) > 0:
             await message.reply("".join(emoji_text(emoji()) for emoji in emojis))
     else:
@@ -62,11 +69,19 @@ async def on_message(message: discord.Message):
             await message.add_reaction(emoji())
 
 
-@bot.event
+@bot.listen()
 async def on_member_join(member: discord.Member):
-    channel = bot.get_channel(980962249550213176)
+    channel = bot.get_channel(JOIN_LEAVE_MSG_CHANNEL)
     await channel.send(
         f"Welcome to the server, {member.mention}! Enjoy your stay here."
+    )
+
+
+@bot.listen()
+async def on_member_remove(member: discord.Member):
+    channel = bot.get_channel(JOIN_LEAVE_MSG_CHANNEL)
+    await channel.send(
+        f"{EMOJIS['vriska']()} Noooooooooooooooo, {member.mention} left!"
     )
 
 
