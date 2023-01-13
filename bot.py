@@ -14,7 +14,7 @@ EMOJIS = {
     "thumbsupdirk": "<:thumbsupdirk:1016921360674598944>",
 }
 
-bot = discord.Bot()
+bot = discord.Bot(intents=discord.Intents.all())
 
 
 @bot.listen()
