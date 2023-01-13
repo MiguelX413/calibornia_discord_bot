@@ -4,6 +4,8 @@ import os
 
 import discord
 
+GUILD = 980962249550213170
+
 bot = discord.Bot()
 
 
@@ -25,13 +27,13 @@ async def on_member_join(member):
 
 @bot.slash_command(name="verify", description="Mod command to verify new users.")
 async def verify(ctx, member: discord.Member):
-    role = discord.utils.get(ctx.guild.roles, name="member")
+    role = bot.get_guild(GUILD).get_role(982177726691700736)
     await member.add_roles(role)
     await member.send(f"Congratulations, you're now verified! Welcome to the server!")
     await ctx.respond(f"<:thumbsupdirk:1016921360674598944>")
 
 
-@bot.user_command(name="Verify", guild_ids=[980962249550213170])
+@bot.user_command(name="Verify", guild_ids=[GUILD])
 async def user_verify(ctx, member: discord.member):
     role = discord.utils.get(ctx.guild.roles, name="member")
     await member.add_roles(role)
