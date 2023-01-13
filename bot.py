@@ -30,7 +30,7 @@ async def verify (ctx, member: discord.Member):
     )
     await ctx.respond(f"<:thumbsupdirk:1016921360674598944>")        
 
-@bot.user_command(name="Verify", guild_ids=[667126333737926687])
+@bot.user_command(name="Verify", guild_ids=[980962249550213170])
 async def userVerify (ctx, member: discord.member):
     role = discord.utils.get(ctx.guild.roles, name="member")
     await member.add_roles(role)
