@@ -40,10 +40,6 @@ EMOJI_TRIGGERS = {
 }
 
 
-def emoji_text(emoji: discord.Emoji) -> str:
-    return f"<:{emoji.name}:{emoji.id}>"
-
-
 def non_bot_member_count(members: List[discord.Member]) -> int:
     return sum(1 if not member.bot else 0 for member in members)
 
@@ -64,7 +60,7 @@ async def on_message(message: discord.Message):
     )
 
     if message.channel.id in [CHANNELS["spam"]]:
-        reply = "".join(emoji_text(emoji()) for emoji in emojis)
+        reply = "".join(str(emoji()) for emoji in emojis)
         if len(reply) > 0:
             await message.reply(reply)
     else:
@@ -105,7 +101,7 @@ async def _verify(ctx: discord.ApplicationContext, member: discord.Member):
         return
     await member.add_roles(role)
     await member.send("Congratulations, you're now verified! Welcome to the server!")
-    await ctx.respond(emoji_text(EMOJIS["thumbsupdirk"]()), ephemeral=True)
+    await ctx.respond(str(EMOJIS["thumbsupdirk"]()), ephemeral=True)
 
 
 @bot.slash_command(name="verify", description="Mod command to verify new users.")
