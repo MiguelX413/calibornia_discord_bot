@@ -6,6 +6,11 @@ import discord
 
 GUILD = 980962249550213170
 
+EMOJIS = {
+    "vriska": "<:vriska:1017263376361062490>",
+    "thumbsupdirk": "<:thumbsupdirk:1016921360674598944>",
+}
+
 bot = discord.Bot()
 
 
@@ -14,7 +19,7 @@ async def on_message(message: discord.Message):
     if bot.application_id == message.author.id:
         return
     if "vriska".casefold() in message.content.casefold():
-        await message.reply("<:vriska:1017263376361062490>")
+        await message.reply(EMOJIS["vriska"])
 
 
 @bot.event
@@ -29,16 +34,16 @@ async def on_member_join(member):
 async def verify(ctx, member: discord.Member):
     role = bot.get_guild(GUILD).get_role(982177726691700736)
     await member.add_roles(role)
-    await member.send(f"Congratulations, you're now verified! Welcome to the server!")
-    await ctx.respond(f"<:thumbsupdirk:1016921360674598944>")
+    await member.send("Congratulations, you're now verified! Welcome to the server!")
+    await ctx.respond(EMOJIS["thumbsupdirk"])
 
 
 @bot.user_command(name="Verify", guild_ids=[GUILD])
 async def user_verify(ctx, member: discord.member):
     role = discord.utils.get(ctx.guild.roles, name="member")
     await member.add_roles(role)
-    await member.send(f"Congratulations, you're now verified! Welcome to the server!")
-    await ctx.respond(f"<:thumbsupdirk:1016921360674598944>")
+    await member.send("Congratulations, you're now verified! Welcome to the server!")
+    await ctx.respond(EMOJIS["thumbsupdirk"])
 
 
 def run_bot(token: str) -> None:
