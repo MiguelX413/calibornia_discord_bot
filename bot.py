@@ -46,7 +46,7 @@ def run_bot(token: str) -> None:
 
 
 def main() -> None:
-    token = os.environ.get("token", None)
+    token = os.getenv("token")
     if not isinstance(token, str):
         raise TypeError("No Token")
     logging.basicConfig(level=logging.INFO)
