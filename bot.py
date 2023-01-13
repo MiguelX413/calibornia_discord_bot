@@ -17,7 +17,7 @@ async def on_message(message: discord.Message):
 
 @bot.event
 async def on_member_join(member):
-    channel = client.get_channel(980962249550213176)
+    channel = bot.get_channel(980962249550213176)
     await channel.send(
         f"Welcome to the server, {member.mention}! Enjoy your stay here."
     )
