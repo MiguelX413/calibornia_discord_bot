@@ -94,7 +94,7 @@ async def _verify(ctx: discord.ApplicationContext, member: discord.Member):
         await ctx.respond("You can't verify me!", ephemeral=True)
         return
 
-    role = bot.get_guild(GUILD).get_role(982177726691700736)
+    role = ctx.guild.get_role(982177726691700736)
     if role in member.roles:
         await ctx.respond("User already verified", ephemeral=True)
         return
