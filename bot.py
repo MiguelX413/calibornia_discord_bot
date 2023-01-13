@@ -9,20 +9,47 @@ GUILD = 980962249550213170
 
 MOD_ROLE = 1027089314405957685
 
+bot = discord.Bot(intents=discord.Intents.all())
+
 EMOJIS = {
-    "vriska": "<:vriska:1017263376361062490>",
-    "thumbsupdirk": "<:thumbsupdirk:1016921360674598944>",
+    "vriska": lambda: bot.get_emoji(1017263376361062490),
+    "thumbsupdirk": lambda: bot.get_emoji(1016921360674598944),
 }
 
-bot = discord.Bot(intents=discord.Intents.all())
+EMOJI_TRIGGERS = {
+    emoji: list(trigger.casefold() for trigger in triggers)
+    for emoji, triggers in [(EMOJIS["vriska"], ["vriska"])]
+}
+
+
+def emoji_text(emoji: discord.Emoji) -> str:
+    return f"<:{emoji.name}:{emoji.id}>"
 
 
 @bot.listen()
 async def on_message(message: discord.Message):
     if bot.application_id == message.author.id:
         return
-    if "vriska".casefold() in message.content.casefold():
-        await message.reply(EMOJIS["vriska"])
+    casefolded_message = message.content.casefold()
+    emojis = list(
+        filter(
+            lambda x: x is not None,
+            (
+                emoji
+                if any(
+                    (trigger in casefolded_message) for trigger in EMOJI_TRIGGERS[emoji]
+                )
+                else None
+                for emoji in EMOJI_TRIGGERS
+            ),
+        )
+    )
+    if message.channel.id in [981995926883287142]:
+        if len(emojis) > 0:
+            await message.reply("".join(emoji_text(emoji()) for emoji in emojis))
+    else:
+        for emoji in emojis:
+            await message.add_reaction(emoji())
 
 
 @bot.event
@@ -41,7 +68,7 @@ async def _verify(ctx: discord.ApplicationContext, member: discord.Member):
     role = bot.get_guild(GUILD).get_role(982177726691700736)
     await member.add_roles(role)
     await member.send("Congratulations, you're now verified! Welcome to the server!")
-    await ctx.respond(EMOJIS["thumbsupdirk"])
+    await ctx.respond(emoji_text(EMOJIS["thumbsupdirk"]()))
 
 
 @bot.slash_command(name="verify", description="Mod command to verify new users.")
