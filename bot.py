@@ -16,6 +16,8 @@ CHANNELS = {
 
 JOIN_LEAVE_MSG_CHANNEL = CHANNELS["general"]
 
+MEMBER_COUNT = len([m for m in ctx.guild.members if not m.bot])
+
 bot = discord.Bot(intents=discord.Intents.all())
 
 EMOJIS = {
@@ -71,7 +73,7 @@ async def on_message(message: discord.Message):
 async def on_member_join(member: discord.Member):
     channel = bot.get_channel(JOIN_LEAVE_MSG_CHANNEL)
     await channel.send(
-        f"Welcome to hell, {member.mention}! Check out <#980968056245354596> to get verified."
+        f"Welcome to hell, {member.mention}! We now number "+MEMBER_COUNT+"! Check out <#980968056245354596> to get verified."
     )
 
 
@@ -79,7 +81,7 @@ async def on_member_join(member: discord.Member):
 async def on_member_remove(member: discord.Member):
     channel = bot.get_channel(JOIN_LEAVE_MSG_CHANNEL)
     await channel.send(
-        f"{EMOJIS['vriska']()} Noooooooooooooooo, {member.mention} left!"
+        f"{EMOJIS['vriska']()} {member.mention} couldn't bear the torture. Our population lowers to "+MEMBER_COUNT+". They'll be back."
     )
 
 
