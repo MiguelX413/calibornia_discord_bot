@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import logging
 import os
+from typing import List
 
 import discord
 from discord.ext.commands import has_role
@@ -43,8 +44,8 @@ def emoji_text(emoji: discord.Emoji) -> str:
     return f"<:{emoji.name}:{emoji.id}>"
 
 
-def non_bot_member_count() -> int:
-    return sum(1 if not member.bot else 0 for member in bot.get_guild(GUILD).members)
+def non_bot_member_count(members: List[discord.Member]) -> int:
+    return sum(1 if not member.bot else 0 for member in members)
 
 
 @bot.listen()
@@ -75,7 +76,7 @@ async def on_message(message: discord.Message):
 async def on_member_join(member: discord.Member):
     channel = bot.get_channel(JOIN_LEAVE_MSG_CHANNEL)
     await channel.send(
-        f"Welcome to hell, {member.mention}! We now number {non_bot_member_count()}!"
+        f"Welcome to hell, {member.mention}! We now number {non_bot_member_count(member.guild.members)}!"
         " Check out <#980968056245354596> to get verified."
     )
 
@@ -85,7 +86,7 @@ async def on_member_remove(member: discord.Member):
     channel = bot.get_channel(JOIN_LEAVE_MSG_CHANNEL)
     await channel.send(
         f"{EMOJIS['vriska']()} {member.mention} couldn't bear the torture. Our population lowers to "
-        f"{non_bot_member_count()}. They'll be back."
+        f"{non_bot_member_count(member.guild.members)}. They'll be back."
     )
 
 
