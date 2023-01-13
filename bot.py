@@ -71,7 +71,7 @@ async def on_message(message: discord.Message):
 async def on_member_join(member: discord.Member):
     channel = bot.get_channel(JOIN_LEAVE_MSG_CHANNEL)
     await channel.send(
-        f"Welcome to the server, {member.mention}! Enjoy your stay here."
+        f"Welcome to hell, {member.mention}! Check out <#980968056245354596> to get verified."
     )
 
 
@@ -94,7 +94,7 @@ async def _verify(ctx: discord.ApplicationContext, member: discord.Member):
         return
     await member.add_roles(role)
     await member.send("Congratulations, you're now verified! Welcome to the server!")
-    await ctx.respond(emoji_text(EMOJIS["thumbsupdirk"]()))
+    await ctx.respond(emoji_text(EMOJIS["thumbsupdirk"]()), ephemeral=True)
 
 
 @bot.slash_command(name="verify", description="Mod command to verify new users.")
