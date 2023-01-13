@@ -30,20 +30,21 @@ async def on_member_join(member: discord.Member):
     )
 
 
-@bot.slash_command(name="verify", description="Mod command to verify new users.")
-async def verify(ctx, member: discord.Member):
+async def _verify(ctx, member: discord.Member):
     role = bot.get_guild(GUILD).get_role(982177726691700736)
     await member.add_roles(role)
     await member.send("Congratulations, you're now verified! Welcome to the server!")
     await ctx.respond(EMOJIS["thumbsupdirk"])
 
 
+@bot.slash_command(name="verify", description="Mod command to verify new users.")
+async def verify(ctx, member: discord.Member):
+    await _verify(ctx, member)
+
+
 @bot.user_command(name="Verify", guild_ids=[GUILD])
 async def user_verify(ctx, member: discord.Member):
-    role = discord.utils.get(ctx.guild.roles, name="member")
-    await member.add_roles(role)
-    await member.send("Congratulations, you're now verified! Welcome to the server!")
-    await ctx.respond(EMOJIS["thumbsupdirk"])
+    await _verify(ctx, member)
 
 
 def run_bot(token: str) -> None:
