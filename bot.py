@@ -89,6 +89,9 @@ async def _verify(ctx: discord.ApplicationContext, member: discord.Member):
         return
 
     role = bot.get_guild(GUILD).get_role(982177726691700736)
+    if role in member.roles:
+        await ctx.respond("User already verified", ephemeral=True)
+        return
     await member.add_roles(role)
     await member.send("Congratulations, you're now verified! Welcome to the server!")
     await ctx.respond(emoji_text(EMOJIS["thumbsupdirk"]()))
