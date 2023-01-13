@@ -3,8 +3,11 @@ import logging
 import os
 
 import discord
+from discord.ext.commands import has_role
 
 GUILD = 980962249550213170
+
+MOD_ROLE = 1027089314405957685
 
 EMOJIS = {
     "vriska": "<:vriska:1017263376361062490>",
@@ -42,11 +45,13 @@ async def _verify(ctx, member: discord.Member):
 
 
 @bot.slash_command(name="verify", description="Mod command to verify new users.")
+@has_role(MOD_ROLE)
 async def verify(ctx, member: discord.Member):
     await _verify(ctx, member)
 
 
 @bot.user_command(name="Verify", guild_ids=[GUILD])
+@has_role(MOD_ROLE)
 async def user_verify(ctx, member: discord.Member):
     await _verify(ctx, member)
 
