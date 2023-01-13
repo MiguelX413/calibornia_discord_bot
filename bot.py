@@ -14,11 +14,21 @@ bot = discord.Bot(intents=discord.Intents.all())
 EMOJIS = {
     "vriska": lambda: bot.get_emoji(1017263376361062490),
     "thumbsupdirk": lambda: bot.get_emoji(1016921360674598944),
+    "johndab": lambda: bot.get_emoji(1023722986332749834),
+    "rosedab": lambda: bot.get_emoji(1023722984680214528),
+    "davedab": lambda: bot.get_emoji(1023722989298122824),
+    "jadedab": lambda: bot.get_emoji(1023722987834331156),
 }
 
 EMOJI_TRIGGERS = {
     emoji: list(trigger.casefold() for trigger in triggers)
-    for emoji, triggers in [(EMOJIS["vriska"], ["vriska"])]
+    for emoji, triggers in [
+        (EMOJIS["vriska"], ["vriska"]),
+        (EMOJIS["johndab"], ["john"]),
+        (EMOJIS["rosedab"], ["rose"]),
+        (EMOJIS["davedab"], ["dave"]),
+        (EMOJIS["jadedab"], ["jade"]),
+    ]
 }
 
 
