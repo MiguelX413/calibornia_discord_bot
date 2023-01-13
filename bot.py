@@ -33,7 +33,7 @@ async def on_member_join(member: discord.Member):
     )
 
 
-async def _verify(ctx, member: discord.Member):
+async def _verify(ctx: discord.ApplicationContext, member: discord.Member):
     if member.id == bot.application_id:
         await ctx.respond("You can't verify me!")
         return
@@ -46,13 +46,13 @@ async def _verify(ctx, member: discord.Member):
 
 @bot.slash_command(name="verify", description="Mod command to verify new users.")
 @has_role(MOD_ROLE)
-async def verify(ctx, member: discord.Member):
+async def verify(ctx: discord.ApplicationContext, member: discord.Member):
     await _verify(ctx, member)
 
 
 @bot.user_command(name="Verify", guild_ids=[GUILD])
 @has_role(MOD_ROLE)
-async def user_verify(ctx, member: discord.Member):
+async def user_verify(ctx: discord.ApplicationContext, member: discord.Member):
     await _verify(ctx, member)
 
 
