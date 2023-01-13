@@ -16,8 +16,6 @@ CHANNELS = {
 
 JOIN_LEAVE_MSG_CHANNEL = CHANNELS["general"]
 
-MEMBER_COUNT = len([m for m in ctx.guild.members if not m.bot])
-
 bot = discord.Bot(intents=discord.Intents.all())
 
 EMOJIS = {
@@ -43,6 +41,10 @@ EMOJI_TRIGGERS = {
 
 def emoji_text(emoji: discord.Emoji) -> str:
     return f"<:{emoji.name}:{emoji.id}>"
+
+
+def non_bot_member_count() -> int:
+    return sum(1 if not member.bot else 0 for member in bot.get_guild(GUILD).members)
 
 
 @bot.listen()
@@ -73,7 +75,8 @@ async def on_message(message: discord.Message):
 async def on_member_join(member: discord.Member):
     channel = bot.get_channel(JOIN_LEAVE_MSG_CHANNEL)
     await channel.send(
-        f"Welcome to hell, {member.mention}! We now number {MEMBER_COUNT}! Check out <#980968056245354596> to get verified."
+        f"Welcome to hell, {member.mention}! We now number {non_bot_member_count()}!"
+        " Check out <#980968056245354596> to get verified."
     )
 
 
@@ -81,7 +84,8 @@ async def on_member_join(member: discord.Member):
 async def on_member_remove(member: discord.Member):
     channel = bot.get_channel(JOIN_LEAVE_MSG_CHANNEL)
     await channel.send(
-        f"{EMOJIS['vriska']()} {member.mention} couldn't bear the torture. Our population lowers to {MEMBER_COUNT}. They'll be back."
+        f"{EMOJIS['vriska']()} {member.mention} couldn't bear the torture. Our population lowers to "
+        f"{non_bot_member_count()}. They'll be back."
     )
 
 
