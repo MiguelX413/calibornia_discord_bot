@@ -30,6 +30,14 @@ async def verify (ctx, member: discord.Member):
     )
     await ctx.respond(f"<:thumbsupdirk:1016921360674598944>")        
 
+@bot.user_command(name="Verify", guild_ids=[667126333737926687])
+async def userVerify (ctx, member: discord.member):
+    role = discord.utils.get(ctx.guild.roles, name="member")
+    await member.add_roles(role)
+    await member.send(
+        f"Congratulations, you're now verified! Welcome to the server!"
+    )
+    await ctx.respond(f"<:thumbsupdirk:1016921360674598944>")
 
 def run_bot(token: str) -> None:
     bot.run(token)
