@@ -31,6 +31,10 @@ async def on_member_join(member: discord.Member):
 
 
 async def _verify(ctx, member: discord.Member):
+    if member.id == bot.application_id:
+        await ctx.respond("You can't verify me!")
+        return
+
     role = bot.get_guild(GUILD).get_role(982177726691700736)
     await member.add_roles(role)
     await member.send("Congratulations, you're now verified! Welcome to the server!")
