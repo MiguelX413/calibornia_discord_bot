@@ -48,22 +48,20 @@ async def on_message(message: discord.Message):
     if bot.application_id == message.author.id:
         return
     casefolded_message = message.content.casefold()
-    emojis = list(
-        filter(
-            lambda x: x is not None,
-            (
-                emoji
-                if any(
-                    (trigger in casefolded_message) for trigger in EMOJI_TRIGGERS[emoji]
-                )
-                else None
-                for emoji in EMOJI_TRIGGERS
-            ),
-        )
+    emojis = filter(
+        lambda x: x is not None,
+        (
+            emoji
+            if any(trigger in casefolded_message for trigger in EMOJI_TRIGGERS[emoji])
+            else None
+            for emoji in EMOJI_TRIGGERS
+        ),
     )
+
     if message.channel.id in [CHANNELS["spam"]]:
-        if len(emojis) > 0:
-            await message.reply("".join(emoji_text(emoji()) for emoji in emojis))
+        reply = "".join(emoji_text(emoji()) for emoji in emojis)
+        if len(reply) > 0:
+            await message.reply(reply)
     else:
         for emoji in emojis:
             await message.add_reaction(emoji())
