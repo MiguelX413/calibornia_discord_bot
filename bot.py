@@ -7,24 +7,28 @@ import discord
 
 bot = discord.Bot()
 
-
-@bot.slash_command()
-async def hello(ctx: discord.ApplicationContext, name: Optional[str] = None):
-    name = name or ctx.author.name
-    await ctx.respond(f"Hello {name}!")
-
-
-@bot.slash_command()
-async def hi(ctx: discord.ApplicationContext, user: discord.User):
-    await ctx.respond(f"{ctx.author.mention} says hello to {user.name}!")
-
-
 @bot.listen()
 async def on_message(message: discord.Message):
     if bot.application_id == message.author.id:
         return
     if "vriska".casefold() in message.content.casefold():
         await message.reply("<:vriska:1017263376361062490>")
+          
+@bot.event
+async def on_member_join(member):
+    channel = client.get_channel(980962249550213176)
+    await channel.send(
+        f'Welcome to the server, {member.mention}! Enjoy your stay here.'
+    )
+
+@bot.slash_command(name ="verify", description="Mod command to verify new users.")
+async def verify (ctx, member: discord.Member):
+    role = discord.utils.get(ctx.guild.roles, name="member")
+    await member.add_roles(role)
+    await member.send(
+        f"Congratulations, you're now verified! Welcome to the server!"
+    )
+    await ctx.respond(f"<:thumbsupdirk:1016921360674598944>")        
 
 
 def run_bot(token: str) -> None:
