@@ -23,7 +23,7 @@ async def on_message(message: discord.Message):
 
 
 @bot.event
-async def on_member_join(member):
+async def on_member_join(member: discord.Member):
     channel = bot.get_channel(980962249550213176)
     await channel.send(
         f"Welcome to the server, {member.mention}! Enjoy your stay here."
@@ -39,7 +39,7 @@ async def verify(ctx, member: discord.Member):
 
 
 @bot.user_command(name="Verify", guild_ids=[GUILD])
-async def user_verify(ctx, member: discord.member):
+async def user_verify(ctx, member: discord.Member):
     role = discord.utils.get(ctx.guild.roles, name="member")
     await member.add_roles(role)
     await member.send("Congratulations, you're now verified! Welcome to the server!")
