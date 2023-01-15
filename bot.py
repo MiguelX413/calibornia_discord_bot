@@ -49,14 +49,10 @@ async def on_message(message: discord.Message):
     if bot.application_id == message.author.id:
         return
     casefolded_message = message.content.casefold()
-    emojis = filter(
-        lambda x: x is not None,
-        (
-            emoji
-            if any(trigger in casefolded_message for trigger in EMOJI_TRIGGERS[emoji])
-            else None
-            for emoji in EMOJI_TRIGGERS
-        ),
+    emojis = (
+        emoji
+        for emoji in EMOJI_TRIGGERS
+        if any(trigger in casefolded_message for trigger in EMOJI_TRIGGERS[emoji])
     )
 
     if message.channel.id in [CHANNELS["spam"]]:
