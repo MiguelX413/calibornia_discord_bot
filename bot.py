@@ -8,12 +8,15 @@ from discord.ext.commands import has_role
 
 GUILD = 980962249550213170
 
-MOD_ROLE = 1027089314405957685
-
 CHANNELS = {
     "general": 980962249550213176,
     "spam": 981995926883287142,
     "modlog": 981416669706608650,
+}
+
+ROLES = {
+    "member": 982177726691700736,
+    "mod": 1027089314405957685,
 }
 
 JOIN_LEAVE_MSG_CHANNEL = CHANNELS["general"]
@@ -92,7 +95,7 @@ async def _verify(ctx: discord.ApplicationContext, member: discord.Member):
         await ctx.respond("User no longer in the server", ephemeral=True)
         return
 
-    role = ctx.guild.get_role(982177726691700736)
+    role = ctx.guild.get_role(ROLES["member"])
     if role in member.roles:
         await ctx.respond("User already verified", ephemeral=True)
         return
@@ -105,13 +108,13 @@ async def _verify(ctx: discord.ApplicationContext, member: discord.Member):
 
 
 @bot.slash_command(name="verify", description="Mod command to verify new users.")
-@has_role(MOD_ROLE)
+@has_role(ROLES["mod"])
 async def verify(ctx: discord.ApplicationContext, member: discord.Member):
     await _verify(ctx, member)
 
 
 @bot.user_command(name="Verify", guild_ids=[GUILD])
-@has_role(MOD_ROLE)
+@has_role(ROLES["mod"])
 async def user_verify(ctx: discord.ApplicationContext, member: discord.Member):
     await _verify(ctx, member)
 
