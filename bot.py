@@ -31,11 +31,11 @@ EMOJIS = {
 EMOJI_TRIGGERS = {
     emoji: list(trigger.casefold() for trigger in triggers)
     for emoji, triggers in [
-        (EMOJIS["vriska"], ["vriska"]),
-        (EMOJIS["johndab"], ["john"]),
-        (EMOJIS["rosedab"], ["rose"]),
-        (EMOJIS["davedab"], ["dave"]),
-        (EMOJIS["jadedab"], ["jade"]),
+        (EMOJIS["vriska"], ["vriska", "serket"]),
+        (EMOJIS["johndab"], ["john", "egbert"]),
+        (EMOJIS["rosedab"], ["rose", "lalonde"]),
+        (EMOJIS["davedab"], ["dave", "strider"]),
+        (EMOJIS["jadedab"], ["jade", "harley"]),
     ]
 }
 
