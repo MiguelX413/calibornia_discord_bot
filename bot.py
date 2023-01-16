@@ -13,6 +13,7 @@ MOD_ROLE = 1027089314405957685
 CHANNELS = {
     "general": 980962249550213176,
     "spam": 981995926883287142,
+    "modlog": 981416669706608650,
 }
 
 JOIN_LEAVE_MSG_CHANNEL = CHANNELS["general"]
@@ -98,6 +99,9 @@ async def _verify(ctx: discord.ApplicationContext, member: discord.Member):
     await member.add_roles(role)
     await member.send("Congratulations, you're now verified! Welcome to the server!")
     await ctx.respond(str(EMOJIS["thumbsupdirk"]()), ephemeral=True)
+    await ctx.guild.get_channel(CHANNELS["modlog"]).send(
+        f"{ctx.user.mention} verified {member.mention}"
+    )
 
 
 @bot.slash_command(name="verify", description="Mod command to verify new users.")
