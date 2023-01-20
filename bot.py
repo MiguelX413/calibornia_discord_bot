@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import logging
 import os
+import random
 from typing import List
 
 import discord
@@ -55,7 +56,7 @@ async def on_message(message: discord.Message):
     casefolded_message = message.content.casefold()
     emojis = (
         emoji
-        for emoji in EMOJI_TRIGGERS
+        for emoji in random.sample([*EMOJI_TRIGGERS], len(EMOJI_TRIGGERS))
         if any(trigger in casefolded_message for trigger in EMOJI_TRIGGERS[emoji])
     )
 
