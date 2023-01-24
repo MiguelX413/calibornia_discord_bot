@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import logging
 import os
-import random
 from typing import List
 
 import discord
@@ -61,9 +60,31 @@ async def on_message(message: discord.Message):
         return
     casefolded_message = message.content.casefold()
     emojis = (
-        emoji
-        for emoji in random.sample([*EMOJI_TRIGGERS], len(EMOJI_TRIGGERS))
-        if any(trigger in casefolded_message for trigger in EMOJI_TRIGGERS[emoji])
+        emoji_with_pos[0]
+        for emoji_with_pos in sorted(
+            (
+                emoji_with_pos
+                for emoji_with_pos in (
+                    (
+                        potential_emoji,
+                        next(
+                            (
+                                pos
+                                for pos in (
+                                    casefolded_message.find(trigger)
+                                    for trigger in EMOJI_TRIGGERS[potential_emoji]
+                                )
+                                if pos != -1
+                            ),
+                            None,
+                        ),
+                    )
+                    for potential_emoji in EMOJI_TRIGGERS
+                )
+                if emoji_with_pos[1] is not None
+            ),
+            key=lambda x: x[1],
+        )
     )
 
     if message.channel.id in [CHANNELS["spam"]]:
