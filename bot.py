@@ -18,12 +18,12 @@ CHANNELS = {
 ROLES = {
     "member": 982177726691700736,
     "mod": 1027089314405957685,
-    "colorDivider": 1027311103014862888
-    "locationDivider": 1027310335314628708
-    "pingDivider": 1027095201262616607
-    "pronounDivider": 1027094772848005160
-    "classpectDivider": 1027309033373310987
-    "miscDivider": 1027309906807750676
+    "colorDivider": 1027311103014862888,
+    "locationDivider": 1027310335314628708,
+    "pingDivider": 1027095201262616607,
+    "pronounDivider": 1027094772848005160,
+    "classpectDivider": 1027309033373310987,
+    "miscDivider": 1027309906807750676,
 }
 
 JOIN_LEAVE_MSG_CHANNEL = CHANNELS["general"]
