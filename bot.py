@@ -18,6 +18,12 @@ CHANNELS = {
 ROLES = {
     "member": 982177726691700736,
     "mod": 1027089314405957685,
+    "colorDivider": 1027311103014862888
+    "locationDivider": 1027310335314628708
+    "pingDivider": 1027095201262616607
+    "pronounDivider": 1027094772848005160
+    "classpectDivider": 1027309033373310987
+    "miscDivider": 1027309906807750676
 }
 
 JOIN_LEAVE_MSG_CHANNEL = CHANNELS["general"]
@@ -75,8 +81,8 @@ async def on_member_join(member: discord.Member):
     await channel.send(
         f"Welcome to hell, {member.mention}! We now number {non_bot_member_count(member.guild.members)}!"
         " Check out <#980968056245354596> to get verified."
+    await member.add_roles(1027311103014862888, 1027310335314628708, 1027095201262616607, 1027094772848005160, 1027309033373310987, 1027309906807750676)
     )
-
 
 @bot.listen()
 async def on_member_remove(member: discord.Member):
