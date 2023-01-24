@@ -63,28 +63,25 @@ async def on_message(message: discord.Message):
         emoji_with_pos[0]
         for emoji_with_pos in sorted(
             (
-                emoji_with_pos
-                for emoji_with_pos in (
-                    (
-                        potential_emoji,
-                        next(
-                            (
-                                pos
-                                for pos in (
-                                    casefolded_message.find(trigger)
-                                    for trigger in EMOJI_TRIGGERS[potential_emoji]
-                                )
-                                if pos != -1
-                            ),
-                            None,
+                (
+                    potential_emoji,
+                    next(
+                        (
+                            pos
+                            for pos in (
+                                casefolded_message.find(trigger)
+                                for trigger in EMOJI_TRIGGERS[potential_emoji]
+                            )
+                            if pos != -1
                         ),
-                    )
-                    for potential_emoji in EMOJI_TRIGGERS
+                        -1,
+                    ),
                 )
-                if emoji_with_pos[1] is not None
+                for potential_emoji in EMOJI_TRIGGERS
             ),
             key=lambda x: x[1],
         )
+        if emoji_with_pos[1] != -1
     )
 
     if message.channel.id in [CHANNELS["spam"]]:
