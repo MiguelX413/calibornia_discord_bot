@@ -65,7 +65,7 @@ async def on_message(message: discord.Message):
             (
                 (
                     potential_emoji,
-                    next(
+                    min(
                         (
                             pos
                             for pos in (
@@ -74,7 +74,7 @@ async def on_message(message: discord.Message):
                             )
                             if pos != -1
                         ),
-                        -1,
+                        default=-1,
                     ),
                 )
                 for potential_emoji in EMOJI_TRIGGERS
