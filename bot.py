@@ -98,7 +98,7 @@ async def on_member_join(member: discord.Member):
     channel = bot.get_channel(JOIN_LEAVE_MSG_CHANNEL)
     await channel.send(
         f"Welcome to hell, {member.mention}! We now number {non_bot_member_count(member.guild.members)}!"
-        " Check out <#980968056245354596> to get verified."
+        " Check out <#980962249550213172> and <#980968056245354596> to get verified."
     )
     await member.add_roles(
         *(
