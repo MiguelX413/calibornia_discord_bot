@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 import logging
 import os
+from itertools import chain
 from typing import List
 
 import discord
 from discord.ext.commands import has_role
+from emoji import emoji_list
 
 GUILD = 980962249550213170
 
@@ -155,6 +157,42 @@ async def verify(ctx: discord.ApplicationContext, member: discord.Member):
 @has_role(ROLES["mod"])
 async def user_verify(ctx: discord.ApplicationContext, member: discord.Member):
     await _verify(ctx, member)
+
+
+@bot.message_command(name="Poll", guild_ids=[GUILD])
+@has_role(ROLES["mod"])
+async def poll(ctx: discord.ApplicationContext, message: discord.Message):
+    await ctx.respond("Removing reactions...", ephemeral=True)
+    for reaction in message.reactions:
+        await reaction.remove(ctx.bot.user)
+
+    await ctx.respond("Reacting...", ephemeral=True)
+    for emoji in (
+        emoji
+        for emoji, pos in sorted(
+            chain(
+                ((emoji, message.content.find(str(emoji))) for emoji in ctx.bot.emojis),
+                (
+                    (match["emoji"], match["match_start"])
+                    for match in emoji_list(message.content)
+                ),
+            ),
+            key=lambda x: x[1],
+        )
+        if pos != -1
+    ):
+        await message.add_reaction(emoji)
+
+    await ctx.respond(f"Done {EMOJIS['thumbsupdirk']()}", ephemeral=True)
+
+
+@bot.message_command(name="Unreact", guild_ids=[GUILD])
+@has_role(ROLES["mod"])
+async def unreact(ctx: discord.ApplicationContext, message: discord.Message):
+    await ctx.respond("Removing reactions...", ephemeral=True)
+    for reaction in message.reactions:
+        await reaction.remove(ctx.bot.user)
+    await ctx.respond(f"Done {EMOJIS['thumbsupdirk']()}", ephemeral=True)
 
 
 def run_bot(token: str) -> None:

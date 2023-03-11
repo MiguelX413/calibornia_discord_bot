@@ -1,1 +1,2 @@
-py-cord[speed]==2.4.0
+py-cord[speed]~=2.4.0
+emoji~=2.2.0
