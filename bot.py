@@ -160,7 +160,6 @@ async def user_verify(ctx: discord.ApplicationContext, member: discord.Member):
 
 
 @bot.message_command(name="Poll", guild_ids=[GUILD])
-@has_role(ROLES["mod"])
 async def poll(ctx: discord.ApplicationContext, message: discord.Message):
     await ctx.respond("Removing reactions...", ephemeral=True)
     for reaction in message.reactions:
@@ -187,7 +186,6 @@ async def poll(ctx: discord.ApplicationContext, message: discord.Message):
 
 
 @bot.message_command(name="Unreact", guild_ids=[GUILD])
-@has_role(ROLES["mod"])
 async def unreact(ctx: discord.ApplicationContext, message: discord.Message):
     await ctx.respond("Removing reactions...", ephemeral=True)
     for reaction in message.reactions:
