@@ -14,6 +14,7 @@ CHANNELS = {
     "general": 980962249550213176,
     "spam": 981995926883287142,
     "modlog": 981416669706608650,
+    "davebot": 1089751694352584725,
 }
 
 ROLES = {
@@ -58,6 +59,32 @@ def non_bot_member_count(members: List[discord.Member]) -> int:
 
 @bot.listen()
 async def on_message(message: discord.Message):
+    if message.guild is None:
+        embed = discord.Embed(
+            description=message.content,
+            color=message.author.color,
+            timestamp=message.created_at,
+        )
+        embed.set_author(
+            name=f"{message.author} ({message.author.mention})",
+            url=f"https://discordapp.com/users/{message.author.id}",
+            icon_url=message.author.avatar,
+        )
+        files = [
+            (await attachment.to_file(use_cached=True))
+            for attachment in message.attachments
+        ]
+        try:
+            await bot.get_guild(GUILD).get_channel(CHANNELS["davebot"]).send(
+                embed=embed, files=files, stickers=message.stickers
+            )
+        except discord.errors.Forbidden:
+            await bot.get_guild(GUILD).get_channel(CHANNELS["davebot"]).send(
+                content=f"Message contained sticker which cannot be sent here.\nStickers: {message.stickers}",
+                embed=embed,
+                files=files,
+            )
+
     if bot.application_id == message.author.id:
         return
     casefolded_message = message.content.casefold()
