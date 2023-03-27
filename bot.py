@@ -59,11 +59,20 @@ def non_bot_member_count(members: List[discord.Member]) -> int:
 
 @bot.listen()
 async def on_message(message: discord.Message):
+    if bot.application_id == message.author.id:
+        return
+
     if message.guild is None:
+        fields = [discord.EmbedField("Message ID", f"{message.id}")]
+        if message.reference is not None:
+            fields.append(
+                discord.EmbedField("Reference", f"{message.reference.message_id}")
+            )
         embed = discord.Embed(
             description=message.content,
             color=message.author.color,
             timestamp=message.created_at,
+            fields=fields,
         )
         embed.set_author(
             name=f"{message.author} ({message.author.mention})",
@@ -85,8 +94,6 @@ async def on_message(message: discord.Message):
                 files=files,
             )
 
-    if bot.application_id == message.author.id:
-        return
     casefolded_message = message.content.casefold()
     emojis = (
         emoji_with_pos[0]
@@ -120,6 +127,42 @@ async def on_message(message: discord.Message):
     else:
         for emoji in emojis:
             await message.add_reaction(emoji())
+
+
+@bot.slash_command(name="direct-message", guild_ids=[GUILD])
+@has_role(ROLES["mod"])
+async def dm(ctx: discord.ApplicationContext, user: discord.User, message: str):
+    if ctx.channel_id != CHANNELS["davebot"]:
+        await ctx.respond(
+            f"U gotta run this command in <#{CHANNELS['davebot']}>", ephemeral=True
+        )
+        return
+    if user == bot.user:
+        await ctx.respond(
+            "Lmao why did u try to message me",
+            ephemeral=True,
+        )
+        return
+    try:
+        sent = await user.send(message)
+        embed = discord.Embed(
+            title=f"To {user} ({user.mention})",
+            description=message,
+            color=ctx.user.color,
+            fields=[
+                discord.EmbedField("Message ID", f"{sent.id}"),
+            ],
+            timestamp=sent.created_at,
+        )
+        embed.set_author(
+            name=f"{ctx.user} ({ctx.user.mention})",
+            url=f"https://discordapp.com/users/{ctx.user.id}",
+            icon_url=ctx.user.avatar,
+        )
+        await ctx.respond(embed=embed)
+    except discord.ApplicationCommandInvokeError as e:
+        await ctx.respond(f"Error:\n{e}", ephemeral=True)
+        raise e
 
 
 @bot.listen()
