@@ -63,7 +63,10 @@ async def on_message(message: discord.Message):
         return
 
     if message.guild is None:
-        fields = [discord.EmbedField("Message ID", f"{message.id}")]
+        fields = [
+            discord.EmbedField("Message ID", f"{message.id}"),
+            discord.EmbedField("Channel ID", f"{message.channel.id}"),
+        ]
         if message.reference is not None:
             fields.append(
                 discord.EmbedField("Reference", f"{message.reference.message_id}")
@@ -151,6 +154,7 @@ async def dm(ctx: discord.ApplicationContext, user: discord.User, message: str):
             color=ctx.user.color,
             fields=[
                 discord.EmbedField("Message ID", f"{sent.id}"),
+                discord.EmbedField("Channel ID", f"{sent.channel.id}"),
             ],
             timestamp=sent.created_at,
         )
