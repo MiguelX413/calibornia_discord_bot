@@ -30,7 +30,110 @@ ROLES = {
 
 JOIN_LEAVE_MSG_CHANNEL = CHANNELS["general"]
 
-bot = discord.Bot(intents=discord.Intents.all())
+
+class DaveBot(discord.Bot):
+    async def on_message(self, message: discord.Message):
+        if self.application_id == message.author.id:
+            return
+
+        if message.guild is None:
+            fields = [
+                discord.EmbedField("Message ID", f"{message.id}"),
+                discord.EmbedField("Channel ID", f"{message.channel.id}"),
+            ]
+            if message.reference is not None:
+                fields.append(
+                    discord.EmbedField("Reference", f"{message.reference.message_id}")
+                )
+            embed = discord.Embed(
+                description=message.content,
+                color=message.author.color,
+                timestamp=message.created_at,
+                fields=fields,
+            )
+            embed.set_author(
+                name=f"{message.author} ({message.author.mention})",
+                url=f"https://discordapp.com/users/{message.author.id}",
+                icon_url=message.author.avatar,
+            )
+            files = [
+                (await attachment.to_file(use_cached=True))
+                for attachment in message.attachments
+            ]
+            try:
+                await self.get_guild(GUILD).get_channel(CHANNELS["davebot"]).send(
+                    embed=embed, files=files, stickers=message.stickers
+                )
+            except discord.errors.Forbidden:
+                await self.get_guild(GUILD).get_channel(CHANNELS["davebot"]).send(
+                    content=f"Message contained sticker which cannot be sent here.\nStickers: {message.stickers}",
+                    embed=embed,
+                    files=files,
+                )
+
+        casefolded_message = message.content.casefold()
+        emojis = (
+            emoji_with_pos[0]
+            for emoji_with_pos in sorted(
+                (
+                    (
+                        potential_emoji,
+                        min(
+                            (
+                                pos
+                                for pos in (
+                                    casefolded_message.find(trigger)
+                                    for trigger in EMOJI_TRIGGERS[potential_emoji]
+                                )
+                                if pos != -1
+                            ),
+                            default=-1,
+                        ),
+                    )
+                    for potential_emoji in EMOJI_TRIGGERS
+                ),
+                key=lambda x: x[1],
+            )
+            if emoji_with_pos[1] != -1
+        )
+
+        if message.channel.id in [CHANNELS["spam"]]:
+            reply = "".join(str(emoji()) for emoji in emojis)
+            if len(reply) > 0:
+                await message.reply(reply)
+        else:
+            for emoji in emojis:
+                await message.add_reaction(emoji())
+
+    async def on_member_join(self, member: discord.Member):
+        channel = self.get_channel(JOIN_LEAVE_MSG_CHANNEL)
+        await channel.send(
+            f"Welcome to hell, {member.mention}! We now number {non_bot_member_count(member.guild.members)}!"
+            " Check out <#980962249550213172> and <#980968056245354596> to get verified."
+        )
+        await member.add_roles(
+            *(
+                member.guild.get_role(role)
+                for role in [
+                    ROLES["color_divider"],
+                    ROLES["location_divider"],
+                    ROLES["ping_divider"],
+                    ROLES["pronoun_divider"],
+                    ROLES["classpect_divider"],
+                    ROLES["misc_divider"],
+                ]
+            )
+        )
+
+    async def on_member_remove(self, member: discord.Member):
+        channel = self.get_channel(JOIN_LEAVE_MSG_CHANNEL)
+        await channel.send(
+            f"{EMOJIS['vriska']()} {member.mention} couldn't bear the torture. Our population lowers to "
+            f"{non_bot_member_count(member.guild.members)}. They'll be back."
+        )
+
+
+bot = DaveBot(intents=discord.Intents.all())
 
 EMOJIS = {
     "vriska": lambda: bot.get_emoji(1017263376361062490),
@@ -55,81 +158,6 @@ EMOJI_TRIGGERS = {
 
 def non_bot_member_count(members: List[discord.Member]) -> int:
     return sum(1 if not member.bot else 0 for member in members)
-
-
-@bot.listen()
-async def on_message(message: discord.Message):
-    if bot.application_id == message.author.id:
-        return
-
-    if message.guild is None:
-        fields = [
-            discord.EmbedField("Message ID", f"{message.id}"),
-            discord.EmbedField("Channel ID", f"{message.channel.id}"),
-        ]
-        if message.reference is not None:
-            fields.append(
-                discord.EmbedField("Reference", f"{message.reference.message_id}")
-            )
-        embed = discord.Embed(
-            description=message.content,
-            color=message.author.color,
-            timestamp=message.created_at,
-            fields=fields,
-        )
-        embed.set_author(
-            name=f"{message.author} ({message.author.mention})",
-            url=f"https://discordapp.com/users/{message.author.id}",
-            icon_url=message.author.avatar,
-        )
-        files = [
-            (await attachment.to_file(use_cached=True))
-            for attachment in message.attachments
-        ]
-        try:
-            await bot.get_guild(GUILD).get_channel(CHANNELS["davebot"]).send(
-                embed=embed, files=files, stickers=message.stickers
-            )
-        except discord.errors.Forbidden:
-            await bot.get_guild(GUILD).get_channel(CHANNELS["davebot"]).send(
-                content=f"Message contained sticker which cannot be sent here.\nStickers: {message.stickers}",
-                embed=embed,
-                files=files,
-            )
-
-    casefolded_message = message.content.casefold()
-    emojis = (
-        emoji_with_pos[0]
-        for emoji_with_pos in sorted(
-            (
-                (
-                    potential_emoji,
-                    min(
-                        (
-                            pos
-                            for pos in (
-                                casefolded_message.find(trigger)
-                                for trigger in EMOJI_TRIGGERS[potential_emoji]
-                            )
-                            if pos != -1
-                        ),
-                        default=-1,
-                    ),
-                )
-                for potential_emoji in EMOJI_TRIGGERS
-            ),
-            key=lambda x: x[1],
-        )
-        if emoji_with_pos[1] != -1
-    )
-
-    if message.channel.id in [CHANNELS["spam"]]:
-        reply = "".join(str(emoji()) for emoji in emojis)
-        if len(reply) > 0:
-            await message.reply(reply)
-    else:
-        for emoji in emojis:
-            await message.add_reaction(emoji())
 
 
 @bot.slash_command(name="message", guild_ids=[GUILD])
@@ -167,37 +195,6 @@ async def dm(ctx: discord.ApplicationContext, user: discord.User, message: str):
     except discord.ApplicationCommandInvokeError as e:
         await ctx.respond(f"Error:\n{e}", ephemeral=True)
         raise e
-
-
-@bot.listen()
-async def on_member_join(member: discord.Member):
-    channel = bot.get_channel(JOIN_LEAVE_MSG_CHANNEL)
-    await channel.send(
-        f"Welcome to hell, {member.mention}! We now number {non_bot_member_count(member.guild.members)}!"
-        " Check out <#980962249550213172> and <#980968056245354596> to get verified."
-    )
-    await member.add_roles(
-        *(
-            member.guild.get_role(role)
-            for role in [
-                ROLES["color_divider"],
-                ROLES["location_divider"],
-                ROLES["ping_divider"],
-                ROLES["pronoun_divider"],
-                ROLES["classpect_divider"],
-                ROLES["misc_divider"],
-            ]
-        )
-    )
-
-
-@bot.listen()
-async def on_member_remove(member: discord.Member):
-    channel = bot.get_channel(JOIN_LEAVE_MSG_CHANNEL)
-    await channel.send(
-        f"{EMOJIS['vriska']()} {member.mention} couldn't bear the torture. Our population lowers to "
-        f"{non_bot_member_count(member.guild.members)}. They'll be back."
-    )
 
 
 async def _verify(ctx: discord.ApplicationContext, member: discord.Member):
