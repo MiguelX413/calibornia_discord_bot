@@ -132,7 +132,7 @@ async def on_message(message: discord.Message):
             await message.add_reaction(emoji())
 
 
-@bot.slash_command(name="direct-message", guild_ids=[GUILD])
+@bot.slash_command(name="message", guild_ids=[GUILD])
 @has_role(ROLES["mod"])
 async def dm(ctx: discord.ApplicationContext, user: discord.User, message: str):
     if ctx.channel_id != CHANNELS["davebot"]:
