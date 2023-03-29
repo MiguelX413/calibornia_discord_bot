@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import asyncio
 import logging
 import os
 from itertools import chain
@@ -11,6 +12,9 @@ from emoji import emoji_list
 GUILD = 980962249550213170
 
 CHANNELS = {
+    "intros": 980968056245354596,
+    "welcome-and-rules": 980962249550213172,
+    "roles": 981413078556086312,
     "general": 980962249550213176,
     "spam": 981995926883287142,
     "modlog": 981416669706608650,
@@ -106,23 +110,27 @@ class DaveBot(discord.Bot):
                 await message.add_reaction(emoji())
 
     async def on_member_join(self, member: discord.Member):
-        channel = self.get_channel(JOIN_LEAVE_MSG_CHANNEL)
-        await channel.send(
+        welcome_msg = (
             f"Welcome to hell, {member.mention}! We now number {non_bot_member_count(member.guild.members)}!"
-            " Check out <#980962249550213172> and <#980968056245354596> to get verified."
+            f" Check out <#{CHANNELS['welcome-and-rules']}> and <#{CHANNELS['intros']}> to get verified and"
+            f" check out <#{CHANNELS['roles']}> to get roles!"
         )
-        await member.add_roles(
-            *(
-                member.guild.get_role(role)
-                for role in [
-                    ROLES["color_divider"],
-                    ROLES["location_divider"],
-                    ROLES["ping_divider"],
-                    ROLES["pronoun_divider"],
-                    ROLES["classpect_divider"],
-                    ROLES["misc_divider"],
-                ]
-            )
+        await asyncio.gather(
+            self.get_channel(JOIN_LEAVE_MSG_CHANNEL).send(welcome_msg),
+            member.send(welcome_msg),
+            member.add_roles(
+                *(
+                    member.guild.get_role(role)
+                    for role in [
+                        ROLES["color_divider"],
+                        ROLES["location_divider"],
+                        ROLES["ping_divider"],
+                        ROLES["pronoun_divider"],
+                        ROLES["classpect_divider"],
+                        ROLES["misc_divider"],
+                    ]
+                )
+            ),
         )
 
     async def on_member_remove(self, member: discord.Member):
