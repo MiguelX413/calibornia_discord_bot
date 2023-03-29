@@ -35,79 +35,89 @@ ROLES = {
 JOIN_LEAVE_MSG_CHANNEL = CHANNELS["general"]
 
 
+async def _on_message_forward(bot: discord.Bot, message: discord.Message):
+    if bot.application_id == message.author.id:
+        return
+
+    if message.guild is None:
+        fields = [
+            discord.EmbedField("Message ID", f"{message.id}"),
+            discord.EmbedField("Channel ID", f"{message.channel.id}"),
+        ]
+        if message.reference is not None:
+            fields.append(
+                discord.EmbedField("Reference", f"{message.reference.message_id}")
+            )
+        embed = discord.Embed(
+            description=message.content,
+            color=message.author.color,
+            timestamp=message.created_at,
+            fields=fields,
+        )
+        embed.set_author(
+            name=f"{message.author} ({message.author.mention})",
+            url=f"https://discordapp.com/users/{message.author.id}",
+            icon_url=message.author.avatar,
+        )
+        files = [
+            (await attachment.to_file(use_cached=True))
+            for attachment in message.attachments
+        ]
+        try:
+            await bot.get_guild(GUILD).get_channel(CHANNELS["davebot"]).send(
+                embed=embed, files=files, stickers=message.stickers
+            )
+        except discord.errors.Forbidden:
+            await bot.get_guild(GUILD).get_channel(CHANNELS["davebot"]).send(
+                content=f"Message contained sticker which cannot be sent here.\nStickers: {message.stickers}",
+                embed=embed,
+                files=files,
+            )
+
+
+async def _on_message_react(bot: discord.Bot, message: discord.Message):
+    if bot.application_id == message.author.id:
+        return
+
+    casefolded_message = message.content.casefold()
+    emojis = (
+        emoji_with_pos[0]
+        for emoji_with_pos in sorted(
+            (
+                (
+                    potential_emoji,
+                    min(
+                        (
+                            pos
+                            for pos in (
+                                casefolded_message.find(trigger)
+                                for trigger in EMOJI_TRIGGERS[potential_emoji]
+                            )
+                            if pos != -1
+                        ),
+                        default=-1,
+                    ),
+                )
+                for potential_emoji in EMOJI_TRIGGERS
+            ),
+            key=lambda x: x[1],
+        )
+        if emoji_with_pos[1] != -1
+    )
+    if message.channel.id in [CHANNELS["spam"]]:
+        reply = "".join(str(emoji()) for emoji in emojis)
+        if len(reply) > 0:
+            await message.reply(reply)
+    else:
+        for emoji in emojis:
+            await message.add_reaction(emoji())
+
+
 class DaveBot(discord.Bot):
     async def on_message(self, message: discord.Message):
-        if self.application_id == message.author.id:
-            return
-
-        if message.guild is None:
-            fields = [
-                discord.EmbedField("Message ID", f"{message.id}"),
-                discord.EmbedField("Channel ID", f"{message.channel.id}"),
-            ]
-            if message.reference is not None:
-                fields.append(
-                    discord.EmbedField("Reference", f"{message.reference.message_id}")
-                )
-            embed = discord.Embed(
-                description=message.content,
-                color=message.author.color,
-                timestamp=message.created_at,
-                fields=fields,
-            )
-            embed.set_author(
-                name=f"{message.author} ({message.author.mention})",
-                url=f"https://discordapp.com/users/{message.author.id}",
-                icon_url=message.author.avatar,
-            )
-            files = [
-                (await attachment.to_file(use_cached=True))
-                for attachment in message.attachments
-            ]
-            try:
-                await self.get_guild(GUILD).get_channel(CHANNELS["davebot"]).send(
-                    embed=embed, files=files, stickers=message.stickers
-                )
-            except discord.errors.Forbidden:
-                await self.get_guild(GUILD).get_channel(CHANNELS["davebot"]).send(
-                    content=f"Message contained sticker which cannot be sent here.\nStickers: {message.stickers}",
-                    embed=embed,
-                    files=files,
-                )
-
-        casefolded_message = message.content.casefold()
-        emojis = (
-            emoji_with_pos[0]
-            for emoji_with_pos in sorted(
-                (
-                    (
-                        potential_emoji,
-                        min(
-                            (
-                                pos
-                                for pos in (
-                                    casefolded_message.find(trigger)
-                                    for trigger in EMOJI_TRIGGERS[potential_emoji]
-                                )
-                                if pos != -1
-                            ),
-                            default=-1,
-                        ),
-                    )
-                    for potential_emoji in EMOJI_TRIGGERS
-                ),
-                key=lambda x: x[1],
-            )
-            if emoji_with_pos[1] != -1
+        await asyncio.gather(
+            _on_message_forward(self, message), _on_message_react(self, message)
         )
-
-        if message.channel.id in [CHANNELS["spam"]]:
-            reply = "".join(str(emoji()) for emoji in emojis)
-            if len(reply) > 0:
-                await message.reply(reply)
-        else:
-            for emoji in emojis:
-                await message.add_reaction(emoji())
 
     async def on_member_join(self, member: discord.Member):
         welcome_msg = (
@@ -141,15 +151,15 @@ class DaveBot(discord.Bot):
         )
 
 
-bot = DaveBot(intents=discord.Intents.all())
+dave_bot = DaveBot(intents=discord.Intents.all())
 
 EMOJIS = {
-    "vriska": lambda: bot.get_emoji(1017263376361062490),
-    "thumbsupdirk": lambda: bot.get_emoji(1016921360674598944),
-    "johndab": lambda: bot.get_emoji(1023722986332749834),
-    "rosedab": lambda: bot.get_emoji(1023722984680214528),
-    "davedab": lambda: bot.get_emoji(1023722989298122824),
-    "jadedab": lambda: bot.get_emoji(1023722987834331156),
+    "vriska": lambda: dave_bot.get_emoji(1017263376361062490),
+    "thumbsupdirk": lambda: dave_bot.get_emoji(1016921360674598944),
+    "johndab": lambda: dave_bot.get_emoji(1023722986332749834),
+    "rosedab": lambda: dave_bot.get_emoji(1023722984680214528),
+    "davedab": lambda: dave_bot.get_emoji(1023722989298122824),
+    "jadedab": lambda: dave_bot.get_emoji(1023722987834331156),
 }
 
 EMOJI_TRIGGERS = {
@@ -168,7 +178,7 @@ def non_bot_member_count(members: List[discord.Member]) -> int:
     return sum(1 if not member.bot else 0 for member in members)
 
 
-@bot.slash_command(name="message", guild_ids=[GUILD])
+@dave_bot.slash_command(name="message", guild_ids=[GUILD])
 @has_role(ROLES["mod"])
 async def dm(ctx: discord.ApplicationContext, user: discord.User, message: str):
     if ctx.channel_id != CHANNELS["davebot"]:
@@ -176,7 +186,7 @@ async def dm(ctx: discord.ApplicationContext, user: discord.User, message: str):
             f"U gotta run this command in <#{CHANNELS['davebot']}>", ephemeral=True
         )
         return
-    if user == bot.user:
+    if user == dave_bot.user:
         await ctx.respond(
             "Lmao why did u try to message me",
             ephemeral=True,
@@ -206,7 +216,7 @@ async def dm(ctx: discord.ApplicationContext, user: discord.User, message: str):
 
 
 async def _verify(ctx: discord.ApplicationContext, member: discord.Member):
-    if member.id == bot.application_id:
+    if member.id == dave_bot.application_id:
         await ctx.respond("You can't verify me!", ephemeral=True)
         return
 
@@ -219,30 +229,33 @@ async def _verify(ctx: discord.ApplicationContext, member: discord.Member):
         await ctx.respond("User already verified", ephemeral=True)
         return
     await member.add_roles(role)
-    await member.send("Congratulations, you're now verified! Welcome to the server!")
-    await ctx.respond(str(EMOJIS["thumbsupdirk"]()), ephemeral=True)
-    await ctx.guild.get_channel(CHANNELS["modlog"]).send(
-        f"{ctx.user.mention} verified {member.mention}"
+    await asyncio.gather(
+        member.send("Congratulations, you're now verified! Welcome to the server!"),
+        ctx.respond(str(EMOJIS["thumbsupdirk"]()), ephemeral=True),
+        ctx.guild.get_channel(CHANNELS["modlog"]).send(
+            f"{ctx.user.mention} verified {member.mention}"
+        ),
     )
 
 
-@bot.slash_command(name="verify", description="Mod command to verify new users.")
+@dave_bot.slash_command(name="verify", description="Mod command to verify new users.")
 @has_role(ROLES["mod"])
 async def verify(ctx: discord.ApplicationContext, member: discord.Member):
     await _verify(ctx, member)
 
 
-@bot.user_command(name="Verify", guild_ids=[GUILD])
+@dave_bot.user_command(name="Verify", guild_ids=[GUILD])
 @has_role(ROLES["mod"])
 async def user_verify(ctx: discord.ApplicationContext, member: discord.Member):
     await _verify(ctx, member)
 
 
-@bot.message_command(name="Poll", guild_ids=[GUILD])
+@dave_bot.message_command(name="Poll", guild_ids=[GUILD])
 async def poll(ctx: discord.ApplicationContext, message: discord.Message):
     await ctx.respond("Removing reactions...", ephemeral=True)
-    for reaction in message.reactions:
-        await reaction.remove(ctx.bot.user)
+    await asyncio.gather(
+        *(reaction.remove(ctx.bot.user) for reaction in message.reactions)
+    )
 
     await ctx.respond("Reacting...", ephemeral=True)
     for emoji in (
@@ -264,16 +277,17 @@ async def poll(ctx: discord.ApplicationContext, message: discord.Message):
     await ctx.respond(f"Done {EMOJIS['thumbsupdirk']()}", ephemeral=True)
 
 
-@bot.message_command(name="Unreact", guild_ids=[GUILD])
+@dave_bot.message_command(name="Unreact", guild_ids=[GUILD])
 async def unreact(ctx: discord.ApplicationContext, message: discord.Message):
     await ctx.respond("Removing reactions...", ephemeral=True)
-    for reaction in message.reactions:
-        await reaction.remove(ctx.bot.user)
+    await asyncio.gather(
+        *(reaction.remove(ctx.bot.user) for reaction in message.reactions)
+    )
     await ctx.respond(f"Done {EMOJIS['thumbsupdirk']()}", ephemeral=True)
 
 
 def run_bot(token: str) -> None:
-    bot.run(token)
+    dave_bot.run(token)
 
 
 def main() -> None:
