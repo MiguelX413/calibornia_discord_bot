@@ -238,6 +238,17 @@ async def _verify(ctx: discord.ApplicationContext, member: discord.Member):
     )
 
 
+@dave_bot.slash_command(
+    name="member_count", description="The amount of non-bot members."
+)
+async def member_count(ctx: discord.ApplicationContext):
+    await ctx.respond(
+        f"There are currently {non_bot_member_count(ctx.guild.members)} non-bot members out of {len(ctx.guild.members)}"
+        " in the server.",
+        ephemeral=True,
+    )
+
+
 @dave_bot.slash_command(name="verify", description="Mod command to verify new users.")
 @has_role(ROLES["mod"])
 async def verify(ctx: discord.ApplicationContext, member: discord.Member):
