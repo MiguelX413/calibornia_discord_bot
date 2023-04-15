@@ -6,7 +6,7 @@ from itertools import chain
 from typing import List, Optional
 
 import discord
-from discord.ext.commands import has_role
+from discord.ext.commands import has_any_role
 from emoji import emoji_list
 
 GUILD = 980962249550213170
@@ -22,6 +22,7 @@ CHANNELS = {
 }
 
 ROLES = {
+    "admin": 980964927164518470,
     "member": 982177726691700736,
     "mod": 1027089314405957685,
     "color_divider": 1027311103014862888,
@@ -184,7 +185,7 @@ def non_bot_member_count(members: List[discord.Member]) -> int:
 
 
 @dave_bot.slash_command(name="message", guild_ids=[GUILD])
-@has_role(ROLES["mod"])
+@has_any_role(ROLES["mod"], ROLES["admin"])
 async def dm(ctx: discord.ApplicationContext, user: discord.User, message: str):
     if ctx.channel_id != CHANNELS["davebot"]:
         await ctx.respond(
@@ -252,13 +253,13 @@ async def _verify(
 
 
 @dave_bot.user_command(name="Verify", guild_ids=[GUILD])
-@has_role(ROLES["mod"])
+@has_any_role(ROLES["mod"], ROLES["admin"])
 async def user_verify(ctx: discord.ApplicationContext, member: discord.Member):
     await _verify(ctx, member)
 
 
 @dave_bot.message_command(name="Verify", guild_ids=[GUILD])
-@has_role(ROLES["mod"])
+@has_any_role(ROLES["mod"], ROLES["admin"])
 async def msg_verify(ctx: discord.ApplicationContext, message: discord.Message):
     if isinstance(message.author, discord.Member):
         await _verify(ctx, message.author, message)
