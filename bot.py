@@ -3,7 +3,7 @@ import asyncio
 import logging
 import os
 from itertools import chain
-from typing import List
+from typing import List, Optional
 
 import discord
 from discord.ext.commands import has_role
@@ -35,30 +35,35 @@ ROLES = {
 JOIN_LEAVE_MSG_CHANNEL = CHANNELS["general"]
 
 
+def msg_embed(message: discord.Message) -> discord.Embed:
+    fields = [
+        discord.EmbedField("Message ID", f"{message.id}"),
+        discord.EmbedField("Channel ID", f"{message.channel.id}"),
+    ]
+    if message.reference is not None:
+        fields.append(
+            discord.EmbedField("Reference", f"{message.reference.message_id}")
+        )
+    embed = discord.Embed(
+        description=message.content,
+        color=message.author.color,
+        timestamp=message.created_at,
+        fields=fields,
+    )
+    embed.set_author(
+        name=f"{message.author} ({message.author.mention})",
+        url=f"https://discordapp.com/users/{message.author.id}",
+        icon_url=message.author.avatar,
+    )
+    return embed
+
+
 async def _on_message_forward(bot: discord.Bot, message: discord.Message):
     if bot.application_id == message.author.id:
         return
 
     if message.guild is None:
-        fields = [
-            discord.EmbedField("Message ID", f"{message.id}"),
-            discord.EmbedField("Channel ID", f"{message.channel.id}"),
-        ]
-        if message.reference is not None:
-            fields.append(
-                discord.EmbedField("Reference", f"{message.reference.message_id}")
-            )
-        embed = discord.Embed(
-            description=message.content,
-            color=message.author.color,
-            timestamp=message.created_at,
-            fields=fields,
-        )
-        embed.set_author(
-            name=f"{message.author} ({message.author.mention})",
-            url=f"https://discordapp.com/users/{message.author.id}",
-            icon_url=message.author.avatar,
-        )
+        embed = msg_embed(message)
         files = [
             (await attachment.to_file(use_cached=True))
             for attachment in message.attachments
@@ -215,7 +220,11 @@ async def dm(ctx: discord.ApplicationContext, user: discord.User, message: str):
         raise e
 
 
-async def _verify(ctx: discord.ApplicationContext, member: discord.Member):
+async def _verify(
+    ctx: discord.ApplicationContext,
+    member: discord.Member,
+    message: Optional[discord.Message] = None,
+):
     if member.id == dave_bot.application_id:
         await ctx.respond("You can't verify me!", ephemeral=True)
         return
@@ -229,13 +238,32 @@ async def _verify(ctx: discord.ApplicationContext, member: discord.Member):
         await ctx.respond("User already verified", ephemeral=True)
         return
     await member.add_roles(role)
-    await asyncio.gather(
+    coros = [
         member.send("Congratulations, you're now verified! Welcome to the server!"),
         ctx.respond(str(EMOJIS["thumbsupdirk"]()), ephemeral=True),
         ctx.guild.get_channel(CHANNELS["modlog"]).send(
-            f"{ctx.user.mention} verified {member.mention}"
+            f"{ctx.user.mention} verified {member.mention}",
+            embed=None if message is None else msg_embed(message),
         ),
-    )
+    ]
+    if message is not None:
+        coros.append(message.add_reaction(EMOJIS["thumbsupdirk"]()))
+    await asyncio.gather(*coros)
+
+
+@dave_bot.user_command(name="Verify", guild_ids=[GUILD])
+@has_role(ROLES["mod"])
+async def user_verify(ctx: discord.ApplicationContext, member: discord.Member):
+    await _verify(ctx, member)
+
+
+@dave_bot.message_command(name="Verify", guild_ids=[GUILD])
+@has_role(ROLES["mod"])
+async def msg_verify(ctx: discord.ApplicationContext, message: discord.Message):
+    if isinstance(message.author, discord.Member):
+        await _verify(ctx, message.author, message)
+    else:
+        raise TypeError("User, not member")
 
 
 @dave_bot.slash_command(
@@ -247,18 +275,6 @@ async def member_count(ctx: discord.ApplicationContext):
         " in the server.",
         ephemeral=True,
     )
-
-
-@dave_bot.slash_command(name="verify", description="Mod command to verify new users.")
-@has_role(ROLES["mod"])
-async def verify(ctx: discord.ApplicationContext, member: discord.Member):
-    await _verify(ctx, member)
-
-
-@dave_bot.user_command(name="Verify", guild_ids=[GUILD])
-@has_role(ROLES["mod"])
-async def user_verify(ctx: discord.ApplicationContext, member: discord.Member):
-    await _verify(ctx, member)
 
 
 @dave_bot.message_command(name="Poll", guild_ids=[GUILD])
