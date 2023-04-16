@@ -185,8 +185,11 @@ def non_bot_member_count(members: List[discord.Member]) -> int:
     return sum(1 if not member.bot else 0 for member in members)
 
 
+staff_only = has_any_role(ROLES["mod"], ROLES["admin"])
+
+
 @dave_bot.slash_command(name="message", guild_ids=[GUILD])
-@has_any_role(ROLES["mod"], ROLES["admin"])
+@staff_only
 async def dm(ctx: discord.ApplicationContext, user: discord.User, message: str):
     if ctx.channel_id != CHANNELS["davebot"]:
         await ctx.respond(
@@ -254,13 +257,13 @@ async def _verify(
 
 
 @dave_bot.user_command(name="Verify", guild_ids=[GUILD])
-@has_any_role(ROLES["mod"], ROLES["admin"])
+@staff_only
 async def user_verify(ctx: discord.ApplicationContext, member: discord.Member):
     await _verify(ctx, member)
 
 
 @dave_bot.message_command(name="Verify", guild_ids=[GUILD])
-@has_any_role(ROLES["mod"], ROLES["admin"])
+@staff_only
 async def msg_verify(ctx: discord.ApplicationContext, message: discord.Message):
     if isinstance(message.author, discord.Member):
         await _verify(ctx, message.author, message)
@@ -269,7 +272,7 @@ async def msg_verify(ctx: discord.ApplicationContext, message: discord.Message):
 
 
 @dave_bot.slash_command(name="list_unverified", description="Lists unverified members")
-@has_any_role(ROLES["mod"], ROLES["admin"])
+@staff_only
 async def list_unverified(ctx: discord.ApplicationContext):
     entries = (
         f"{member.mention}: {format_dt(member.joined_at)}"
