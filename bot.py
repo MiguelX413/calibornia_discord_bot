@@ -220,7 +220,10 @@ async def dm(ctx: discord.ApplicationContext, user: discord.User, message: str):
             url=f"https://discordapp.com/users/{ctx.user.id}",
             icon_url=ctx.user.avatar,
         )
-        await ctx.respond(embed=embed)
+        await asyncio.gather(
+            ctx.guild.get_channel(CHANNELS["davebot"]).send(embed=embed),
+            ctx.respond("Sent", ephemeral=True),
+        )
     except discord.ApplicationCommandInvokeError as e:
         await ctx.respond(f"Error:\n{e}", ephemeral=True)
         raise e
