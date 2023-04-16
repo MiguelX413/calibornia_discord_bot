@@ -284,14 +284,17 @@ async def list_unverified(ctx: discord.ApplicationContext):
         )
     )
     queue = []
+    queue_total_len = 0
     for entry in entries:
-        if sum(len(item) for item in queue) + len(entry) + len(queue) > 2000:
+        if queue_total_len + len(entry) + len(queue) > 2000:
             await ctx.respond(
                 "\n".join(queue),
                 ephemeral=True,
             )
             queue = []
+            queue_total_len = 0
         queue.append(entry)
+        queue_total_len += len(entry)
     if len(queue) > 0:
         await ctx.respond(
             "\n".join(queue),
