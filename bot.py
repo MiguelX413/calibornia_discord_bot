@@ -3,10 +3,11 @@ import asyncio
 import logging
 import os
 from itertools import chain
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import discord
 from discord.ext.commands import has_any_role
+from discord.ui import Item
 from discord.utils import format_dt
 from emoji import emoji_list
 
@@ -225,50 +226,86 @@ async def dm(ctx: discord.ApplicationContext, user: discord.User, message: str):
         raise e
 
 
+class VerificationView(discord.ui.View):
+    member: discord.Member
+
+    def __init__(self, member: discord.Member, *items: Item) -> None:
+        super().__init__(*items)
+        self.member = member
+
+    @discord.ui.button(label="Verify without intro")
+    async def button_callback(
+        self, button: discord.Button, interaction: discord.Interaction
+    ):
+        if ROLES["member"] in (role.id for role in self.member.roles):
+            await interaction.response.send_message(
+                "User already verified", ephemeral=True
+            )
+            return
+
+        await self.member.add_roles(interaction.guild.get_role(ROLES["member"]))
+        await asyncio.gather(
+            self.member.send(
+                "Congratulations, you're now verified! Welcome to the server!"
+            ),
+            interaction.response.send_message(
+                str(EMOJIS["thumbsupdirk"]()), ephemeral=True
+            ),
+            interaction.guild.get_channel(CHANNELS["modlog"]).send(
+                f"{interaction.user.mention} verified {self.member.mention} without an intro",
+            ),
+        )
+
+
 async def _verify(
     ctx: discord.ApplicationContext,
-    member: discord.Member,
+    member: Union[discord.Member, discord.User],
     message: Optional[discord.Message] = None,
 ):
     if member.id == dave_bot.application_id:
         await ctx.respond("You can't verify me!", ephemeral=True)
         return
 
-    if member not in ctx.guild.members:
+    if not isinstance(member, discord.Member):
         await ctx.respond("User no longer in the server", ephemeral=True)
         return
 
-    role = ctx.guild.get_role(ROLES["member"])
-    if role in member.roles:
+    if ROLES["member"] in (role.id for role in member.roles):
         await ctx.respond("User already verified", ephemeral=True)
         return
-    await member.add_roles(role)
-    coros = [
+
+    if message is None:
+        await ctx.respond(
+            "Are you sure you want to verify this user without an intro?",
+            ephemeral=True,
+            view=VerificationView(member),
+        )
+        return
+
+    await member.add_roles(ctx.guild.get_role(ROLES["member"]))
+    await asyncio.gather(
         member.send("Congratulations, you're now verified! Welcome to the server!"),
         ctx.respond(str(EMOJIS["thumbsupdirk"]()), ephemeral=True),
         ctx.guild.get_channel(CHANNELS["modlog"]).send(
             f"{ctx.user.mention} verified {member.mention}",
-            embed=None if message is None else msg_embed(message),
+            embed=msg_embed(message),
         ),
-    ]
-    if message is not None:
-        coros.append(message.add_reaction(EMOJIS["thumbsupdirk"]()))
-    await asyncio.gather(*coros)
+        message.add_reaction(EMOJIS["thumbsupdirk"]()),
+    )
 
 
-@dave_bot.user_command(name="Verify", guild_ids=[GUILD])
+@dave_bot.user_command(name="Verify without intro", guild_ids=[GUILD])
 @staff_only
-async def user_verify(ctx: discord.ApplicationContext, member: discord.Member):
-    await _verify(ctx, member)
+async def user_verify(
+    ctx: discord.ApplicationContext, user: Union[discord.Member, discord.User]
+):
+    await _verify(ctx, user)
 
 
 @dave_bot.message_command(name="Verify", guild_ids=[GUILD])
 @staff_only
 async def msg_verify(ctx: discord.ApplicationContext, message: discord.Message):
-    if isinstance(message.author, discord.Member):
-        await _verify(ctx, message.author, message)
-    else:
-        raise TypeError("User, not member")
+    await _verify(ctx, message.author, message)
 
 
 @dave_bot.slash_command(name="list_unverified", description="Lists unverified members")
