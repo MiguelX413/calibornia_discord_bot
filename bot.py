@@ -88,8 +88,8 @@ async def _on_message_react(bot: discord.Bot, message: discord.Message):
 
     casefolded_message = message.content.casefold()
     emojis = (
-        emoji_with_pos[0]
-        for emoji_with_pos in sorted(
+        emoji
+        for emoji, pos in sorted(
             (
                 (
                     potential_emoji,
@@ -109,7 +109,7 @@ async def _on_message_react(bot: discord.Bot, message: discord.Message):
             ),
             key=lambda x: x[1],
         )
-        if emoji_with_pos[1] != -1
+        if pos != -1
     )
     if message.channel.id in [CHANNELS["spam"]]:
         reply = "".join(str(emoji()) for emoji in emojis)
