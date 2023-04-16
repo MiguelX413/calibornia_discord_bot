@@ -273,9 +273,15 @@ async def msg_verify(ctx: discord.ApplicationContext, message: discord.Message):
 async def list_unverified(ctx: discord.ApplicationContext):
     entries = (
         f"{member.mention}: {format_dt(member.joined_at)}"
-        for member in ctx.guild.members
-        if (not member.bot)
-        and (ROLES["member"] not in (role.id for role in member.roles))
+        for member in sorted(
+            (
+                member
+                for member in ctx.guild.members
+                if (not member.bot)
+                and (ROLES["member"] not in (role.id for role in member.roles))
+            ),
+            key=lambda member: member.joined_at,
+        )
     )
     queue = []
     for entry in entries:
