@@ -7,6 +7,7 @@ from typing import List, Optional
 
 import discord
 from discord.ext.commands import has_any_role
+from discord.utils import format_dt
 from emoji import emoji_list
 
 GUILD = 980962249550213170
@@ -265,6 +266,31 @@ async def msg_verify(ctx: discord.ApplicationContext, message: discord.Message):
         await _verify(ctx, message.author, message)
     else:
         raise TypeError("User, not member")
+
+
+@dave_bot.slash_command(name="list_unverified", description="Lists unverified members")
+@has_any_role(ROLES["mod"], ROLES["admin"])
+async def list_unverified(ctx: discord.ApplicationContext):
+    entries = (
+        f"{member.mention}: {format_dt(member.joined_at)}"
+        for member in ctx.guild.members
+        if (not member.bot)
+        and (ROLES["member"] not in (role.id for role in member.roles))
+    )
+    queue = []
+    for entry in entries:
+        if sum(len(item) for item in queue) + len(entry) + len(queue) > 2000:
+            await ctx.respond(
+                "\n".join(queue),
+                ephemeral=True,
+            )
+            queue = []
+        queue.append(entry)
+    if len(queue) > 0:
+        await ctx.respond(
+            "\n".join(queue),
+            ephemeral=True,
+        )
 
 
 @dave_bot.slash_command(
