@@ -33,6 +33,7 @@ ROLES = {
     "pronoun_divider": 1027094772848005160,
     "classpect_divider": 1027309033373310987,
     "misc_divider": 1027309906807750676,
+    "unverified": 1098091859743612948,
 }
 
 JOIN_LEAVE_MSG_CHANNEL = CHANNELS["general"]
@@ -146,6 +147,7 @@ class DaveBot(discord.Bot):
                         ROLES["pronoun_divider"],
                         ROLES["classpect_divider"],
                         ROLES["misc_divider"],
+                        ROLES["unverified"],
                     ]
                 )
             ),
@@ -246,7 +248,10 @@ class VerificationView(discord.ui.View):
             )
             return
 
-        await self.member.add_roles(interaction.guild.get_role(ROLES["member"]))
+        await asyncio.gather(
+            self.member.add_roles(interaction.guild.get_role(ROLES["member"])),
+            self.member.remove_roles(interaction.guild.get_role(ROLES["unverified"])),
+        )
         await asyncio.gather(
             self.member.send(
                 "Congratulations, you're now verified! Welcome to the server!"
@@ -285,7 +290,10 @@ async def _verify(
         )
         return
 
-    await member.add_roles(ctx.guild.get_role(ROLES["member"]))
+    await asyncio.gather(
+        member.add_roles(ctx.guild.get_role(ROLES["member"])),
+        member.remove_roles(ctx.guild.get_role(ROLES["unverified"])),
+    )
     await asyncio.gather(
         member.send("Congratulations, you're now verified! Welcome to the server!"),
         ctx.respond(str(EMOJIS["thumbsupdirk"]()), ephemeral=True),
