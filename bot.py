@@ -196,24 +196,26 @@ def non_bot_member_count(members: List[discord.Member]) -> int:
 staff_only = has_any_role(ROLES["mod"], ROLES["admin"])
 
 
-@dave_bot.slash_command(name="message", guild_ids=[GUILD])
-@staff_only
-async def dm(ctx: discord.ApplicationContext, user: discord.User, message: str):
+async def msg(
+    ctx: discord.ApplicationContext, messageable: discord.abc.Messageable, message: str
+):
     if ctx.channel_id != CHANNELS["davebot"]:
         await ctx.respond(
             f"U gotta run this command in <#{CHANNELS['davebot']}>", ephemeral=True
         )
         return
-    if user == dave_bot.user:
+    if messageable == dave_bot.user:
         await ctx.respond(
             "Lmao why did u try to message me",
             ephemeral=True,
         )
         return
     try:
-        sent = await user.send(message)
+        sent = await messageable.send(message)
         embed = discord.Embed(
-            title=f"To {user} ({user.mention})",
+            title=f"To {messageable} ({messageable.mention})"
+            if isinstance(messageable, Union[discord.TextChannel, discord.User])
+            else f"To {messageable}",
             description=message,
             color=ctx.user.color,
             fields=[
@@ -234,6 +236,23 @@ async def dm(ctx: discord.ApplicationContext, user: discord.User, message: str):
     except discord.ApplicationCommandInvokeError as e:
         await ctx.respond(f"Error:\n{e}", ephemeral=True)
         raise e
+
+
+message_cmds = dave_bot.create_group("message", "Sends messages as bot")
+
+
+@message_cmds.command()
+@staff_only
+async def user(ctx: discord.ApplicationContext, user: discord.User, message: str):
+    await msg(ctx, user, message)
+
+
+@message_cmds.command()
+@staff_only
+async def channel(
+    ctx: discord.ApplicationContext, channel: discord.TextChannel, message: str
+):
+    await msg(ctx, channel, message)
 
 
 class VerificationView(discord.ui.View):
