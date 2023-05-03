@@ -129,13 +129,18 @@ class DaveBot(discord.Bot):
         )
 
     async def on_member_join(self, member: discord.Member):
+        _non_bot_member_count = non_bot_member_count(member.guild.members)
         welcome_msg = (
-            f"Welcome to hell, {member.mention}! We now number {non_bot_member_count(member.guild.members)}!"
+            f"Welcome to hell, {member.mention}! We now number {_non_bot_member_count}!"
             f" Check out <#{CHANNELS['welcome-and-rules']}> and <#{CHANNELS['intros']}> to get verified and"
             f" check out <#{CHANNELS['roles']}> to get roles!"
         )
         await asyncio.gather(
-            self.get_channel(JOIN_LEAVE_MSG_CHANNEL).send(welcome_msg),
+            self.get_channel(JOIN_LEAVE_MSG_CHANNEL).send(
+                f"{member.mention} is number 413... the holy number..."
+                if _non_bot_member_count == 413
+                else welcome_msg
+            ),
             member.send(welcome_msg),
             member.add_roles(
                 *(
