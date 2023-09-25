@@ -133,7 +133,7 @@ class DaveBot(discord.Bot):
         welcome_msg = (
             f"Welcome to hell, {member.mention}! We now number {_non_bot_member_count}!"
             f" Check out <#{CHANNELS['welcome-and-rules']}> and <#{CHANNELS['intros']}> to get verified and"
-            f" check out <#{CHANNELS['roles']}> to get roles!"
+            f" check out https://discord.com/channels/980962249550213170/customize-community to get roles!"
         )
         await asyncio.gather(
             self.get_channel(JOIN_LEAVE_MSG_CHANNEL).send(
