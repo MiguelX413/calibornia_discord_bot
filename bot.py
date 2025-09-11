@@ -213,9 +213,11 @@ async def msg(
     try:
         sent = await messageable.send(message)
         embed = discord.Embed(
-            title=f"To {messageable} ({messageable.mention})"
-            if isinstance(messageable, Union[discord.TextChannel, discord.User])
-            else f"To {messageable}",
+            title=(
+                f"To {messageable} ({messageable.mention})"
+                if isinstance(messageable, Union[discord.TextChannel, discord.User])
+                else f"To {messageable}"
+            ),
             description=message,
             color=ctx.user.color,
             fields=[
