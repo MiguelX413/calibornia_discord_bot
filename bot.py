@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import asyncio
 import logging
+from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 from itertools import chain
 from typing import Any
@@ -38,7 +39,12 @@ ROLES = {
 }
 
 JOIN_LEAVE_MSG_CHANNEL = CHANNELS["general"]
+
 type MessageTarget = discord.abc.Messageable
+type EmojiResolver = Callable[
+    [], discord.Emoji | discord.PartialEmoji | discord.AppEmoji | None
+]
+type EmbedAuthor = discord.User | discord.Member
 
 
 def _guild(bot: discord.Bot) -> discord.Guild:
@@ -69,26 +75,46 @@ def _emoji(name: str) -> discord.Emoji | discord.PartialEmoji | discord.AppEmoji
     return emoji
 
 
+def _has_role(member: discord.Member, role_id: int) -> bool:
+    return any(role.id == role_id for role in member.roles)
+
+
+def _member_role(member: discord.Member, role_name: str) -> discord.Role:
+    return _role(member.guild, ROLES[role_name])
+
+
+def _embed_field(name: str, value: object) -> discord.EmbedField:
+    return discord.EmbedField(name, str(value))
+
+
+def _set_embed_author(embed: discord.Embed, user: EmbedAuthor) -> None:
+    embed.set_author(
+        name=f"{user} ({user.mention})",
+        url=f"https://discordapp.com/users/{user.id}",
+        icon_url=user.avatar,
+    )
+
+
+def _message_reference_id(message: discord.Message) -> int | None:
+    if message.reference is None:
+        return None
+    return message.reference.message_id
+
+
 def msg_embed(message: discord.Message) -> discord.Embed:
     fields = [
-        discord.EmbedField("Message ID", f"{message.id}"),
-        discord.EmbedField("Channel ID", f"{message.channel.id}"),
+        _embed_field("Message ID", message.id),
+        _embed_field("Channel ID", message.channel.id),
     ]
-    if message.reference is not None:
-        fields.append(
-            discord.EmbedField("Reference", f"{message.reference.message_id}")
-        )
+    if (reference_id := _message_reference_id(message)) is not None:
+        fields.append(_embed_field("Reference", reference_id))
     embed = discord.Embed(
         description=message.content,
         color=message.author.color,
         timestamp=message.created_at,
         fields=fields,
     )
-    embed.set_author(
-        name=f"{message.author} ({message.author.mention})",
-        url=f"https://discordapp.com/users/{message.author.id}",
-        icon_url=message.author.avatar,
-    )
+    _set_embed_author(embed, message.author)
     return embed
 
 
@@ -130,19 +156,16 @@ async def _on_message_react(bot: discord.Bot, message: discord.Message):
                     potential_emoji,
                     min(
                         (
-                            pos
-                            for pos in (
-                                casefolded_message.find(trigger)
-                                for trigger in EMOJI_TRIGGERS[potential_emoji]
-                            )
-                            if pos != -1
+                            casefolded_message.find(trigger)
+                            for trigger in EMOJI_TRIGGERS[potential_emoji]
+                            if casefolded_message.find(trigger) != -1
                         ),
                         default=-1,
                     ),
                 )
                 for potential_emoji in EMOJI_TRIGGERS
             ),
-            key=lambda x: x[1],
+            key=lambda item: item[1],
         )
         if pos != -1
     )
@@ -156,7 +179,7 @@ async def _on_message_react(bot: discord.Bot, message: discord.Message):
 
 
 def _emoji_by_factory(
-    factory: Any,
+    factory: EmojiResolver,
 ) -> discord.Emoji | discord.PartialEmoji | discord.AppEmoji:
     for name, candidate in EMOJIS.items():
         if candidate is factory:
@@ -171,9 +194,9 @@ class DaveBot(discord.Bot):
         )
 
     async def on_member_join(self, member: discord.Member):
-        _non_bot_member_count = non_bot_member_count(member.guild.members)
+        current_member_count = non_bot_member_count(member.guild.members)
         welcome_msg = (
-            f"Welcome to hell, {member.mention}! We now number {_non_bot_member_count}!"
+            f"Welcome to hell, {member.mention}! We now number {current_member_count}!"
             f" Check out <#{CHANNELS['welcome-and-rules']}>"
             f" and <#{CHANNELS['intros']}> to get verified and"
             f" check out <id:customize> to get roles!"
@@ -181,22 +204,14 @@ class DaveBot(discord.Bot):
         await asyncio.gather(
             _text_channel(self, JOIN_LEAVE_MSG_CHANNEL).send(
                 f"{member.mention} is number 413... the holy number..."
-                if _non_bot_member_count == 413
+                if current_member_count == 413
                 else welcome_msg
             ),
             member.send(welcome_msg),
             member.add_roles(
                 *(
-                    _role(member.guild, role)
-                    for role in [
-                        ROLES["color_divider"],
-                        ROLES["location_divider"],
-                        ROLES["ping_divider"],
-                        ROLES["pronoun_divider"],
-                        ROLES["classpect_divider"],
-                        ROLES["misc_divider"],
-                        ROLES["unverified"],
-                    ]
+                    _member_role(member, role_name)
+                    for role_name in DEFAULT_JOIN_ROLE_NAMES
                 )
             ),
         )
@@ -212,7 +227,7 @@ class DaveBot(discord.Bot):
 
 dave_bot = DaveBot(intents=discord.Intents.all())
 
-EMOJIS = {
+EMOJIS: dict[str, EmojiResolver] = {
     "vriska": lambda: dave_bot.get_emoji(1017263376361062490),
     "thumbsupdirk": lambda: dave_bot.get_emoji(1016921360674598944),
     "johndab": lambda: dave_bot.get_emoji(1023722986332749834),
@@ -220,6 +235,16 @@ EMOJIS = {
     "davedab": lambda: dave_bot.get_emoji(1023722989298122824),
     "jadedab": lambda: dave_bot.get_emoji(1023722987834331156),
 }
+
+DEFAULT_JOIN_ROLE_NAMES = (
+    "color_divider",
+    "location_divider",
+    "ping_divider",
+    "pronoun_divider",
+    "classpect_divider",
+    "misc_divider",
+    "unverified",
+)
 
 EMOJI_TRIGGERS = {
     emoji: list(trigger.casefold() for trigger in triggers)
@@ -235,6 +260,25 @@ EMOJI_TRIGGERS = {
 
 def non_bot_member_count(members: list[discord.Member]) -> int:
     return sum(not member.bot for member in members)
+
+
+def _chunk_lines(lines: Iterable[str], limit: int = 2000) -> list[str]:
+    chunks: list[str] = []
+    pending_lines: list[str] = []
+    pending_length = 0
+
+    for line in lines:
+        if pending_length + len(line) + len(pending_lines) > limit:
+            chunks.append("\n".join(pending_lines))
+            pending_lines = []
+            pending_length = 0
+        pending_lines.append(line)
+        pending_length += len(line)
+
+    if pending_lines:
+        chunks.append("\n".join(pending_lines))
+
+    return chunks
 
 
 staff_only = has_any_role(ROLES["mod"], ROLES["admin"])
@@ -265,16 +309,12 @@ async def msg(
             description=message,
             color=ctx.user.color,
             fields=[
-                discord.EmbedField("Message ID", f"{sent.id}"),
-                discord.EmbedField("Channel ID", f"{sent.channel.id}"),
+                _embed_field("Message ID", sent.id),
+                _embed_field("Channel ID", sent.channel.id),
             ],
             timestamp=sent.created_at,
         )
-        embed.set_author(
-            name=f"{ctx.user} ({ctx.user.mention})",
-            url=f"https://discordapp.com/users/{ctx.user.id}",
-            icon_url=ctx.user.avatar,
-        )
+        _set_embed_author(embed, ctx.user)
         await asyncio.gather(
             _text_channel(dave_bot, CHANNELS["davebot"]).send(embed=embed),
             ctx.respond("Sent", ephemeral=True),
@@ -317,7 +357,7 @@ class VerificationView(discord.ui.View):
             raise RuntimeError("Verification interaction must happen in a guild")
         if interaction.user is None:
             raise RuntimeError("Verification interaction must have a user")
-        if ROLES["member"] in (role.id for role in self.member.roles):
+        if _has_role(self.member, ROLES["member"]):
             await interaction.response.send_message(
                 "User already verified", ephemeral=True
             )
@@ -356,7 +396,7 @@ async def _verify(
         await ctx.respond("User no longer in the server", ephemeral=True)
         return
 
-    if ROLES["member"] in (role.id for role in member.roles):
+    if _has_role(member, ROLES["member"]):
         await ctx.respond("User already verified", ephemeral=True)
         return
 
@@ -408,7 +448,7 @@ async def list_unverified(ctx: discord.ApplicationContext):
             for member in ctx.guild.members
             if (not member.bot)
             and member.joined_at is not None
-            and (ROLES["member"] not in (role.id for role in member.roles))
+            and (not _has_role(member, ROLES["member"]))
         ),
         key=lambda member: member.joined_at or datetime.min.replace(tzinfo=UTC),
     )
@@ -417,23 +457,8 @@ async def list_unverified(ctx: discord.ApplicationContext):
         for member in unverified_members
         if member.joined_at is not None
     )
-    queue: list[str] = []
-    queue_total_len = 0
-    for entry in entries:
-        if queue_total_len + len(entry) + len(queue) > 2000:
-            await ctx.respond(
-                "\n".join(queue),
-                ephemeral=True,
-            )
-            queue = []
-            queue_total_len = 0
-        queue.append(entry)
-        queue_total_len += len(entry)
-    if queue:
-        await ctx.respond(
-            "\n".join(queue),
-            ephemeral=True,
-        )
+    for chunk in _chunk_lines(entries):
+        await ctx.respond(chunk, ephemeral=True)
 
 
 @dave_bot.slash_command(
