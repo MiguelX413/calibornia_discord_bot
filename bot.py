@@ -3,7 +3,6 @@ import asyncio
 import logging
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
-from itertools import chain
 from typing import Any
 
 import discord
@@ -101,6 +100,13 @@ def _message_reference_id(message: discord.Message) -> int | None:
     return message.reference.message_id
 
 
+def _message_author_color(message: discord.Message) -> discord.Colour:
+    author = message.author
+    if isinstance(author, discord.Member):
+        return author.color
+    return discord.Colour.default()
+
+
 def msg_embed(message: discord.Message) -> discord.Embed:
     fields = [
         _embed_field("Message ID", message.id),
@@ -110,7 +116,7 @@ def msg_embed(message: discord.Message) -> discord.Embed:
         fields.append(_embed_field("Reference", reference_id))
     embed = discord.Embed(
         description=message.content,
-        color=message.author.color,
+        color=_message_author_color(message),
         timestamp=message.created_at,
         fields=fields,
     )
@@ -147,28 +153,7 @@ async def _on_message_react(bot: discord.Bot, message: discord.Message):
     if bot.application_id == message.author.id:
         return
 
-    casefolded_message = message.content.casefold()
-    emojis = (
-        emoji
-        for emoji, pos in sorted(
-            (
-                (
-                    potential_emoji,
-                    min(
-                        (
-                            casefolded_message.find(trigger)
-                            for trigger in EMOJI_TRIGGERS[potential_emoji]
-                            if casefolded_message.find(trigger) != -1
-                        ),
-                        default=-1,
-                    ),
-                )
-                for potential_emoji in EMOJI_TRIGGERS
-            ),
-            key=lambda item: item[1],
-        )
-        if pos != -1
-    )
+    emojis = _triggered_emojis(message.content)
     if message.channel.id == CHANNELS["spam"]:
         reply = "".join(str(emoji()) for emoji in emojis)
         if reply:
@@ -262,6 +247,58 @@ def non_bot_member_count(members: list[discord.Member]) -> int:
     return sum(not member.bot for member in members)
 
 
+def _first_trigger_position(message: str, triggers: Iterable[str]) -> int | None:
+    positions = (message.find(trigger) for trigger in triggers)
+    matches = [position for position in positions if position != -1]
+    if not matches:
+        return None
+    return min(matches)
+
+
+def _triggered_emojis(message: str) -> list[EmojiResolver]:
+    casefolded_message = message.casefold()
+    return [
+        emoji
+        for emoji, position in sorted(
+            (
+                (emoji, _first_trigger_position(casefolded_message, triggers))
+                for emoji, triggers in EMOJI_TRIGGERS.items()
+            ),
+            key=lambda item: item[1] if item[1] is not None else float("inf"),
+        )
+        if position is not None
+    ]
+
+
+def _ordered_poll_emojis(
+    message: str,
+    custom_emojis: Iterable[discord.Emoji | discord.AppEmoji],
+) -> list[str | discord.Emoji | discord.AppEmoji]:
+    emoji_positions: dict[str | discord.Emoji | discord.AppEmoji, int] = {}
+
+    for emoji in custom_emojis:
+        position = message.find(str(emoji))
+        if position != -1:
+            emoji_positions[emoji] = position
+
+    for match in emoji_list(message):
+        emoji_positions.setdefault(match["emoji"], match["match_start"])
+
+    return [
+        emoji for emoji, _ in sorted(emoji_positions.items(), key=lambda item: item[1])
+    ]
+
+
+async def _clear_bot_reactions(
+    ctx: discord.ApplicationContext, message: discord.Message
+) -> None:
+    if ctx.bot.user is None:
+        raise RuntimeError("Bot user is not available")
+    await asyncio.gather(
+        *(reaction.remove(ctx.bot.user) for reaction in message.reactions)
+    )
+
+
 def _chunk_lines(lines: Iterable[str], limit: int = 2000) -> list[str]:
     chunks: list[str] = []
     pending_lines: list[str] = []
@@ -300,12 +337,13 @@ async def msg(
         return
     try:
         sent = await messageable.send(message)
+        target = (
+            f"{messageable} ({messageable.mention})"
+            if isinstance(messageable, discord.TextChannel | discord.User)
+            else str(messageable)
+        )
         embed = discord.Embed(
-            title=(
-                f"To {messageable} ({messageable.mention})"
-                if isinstance(messageable, (discord.TextChannel, discord.User))
-                else f"To {messageable}"
-            ),
+            title=f"To {target}",
             description=message,
             color=ctx.user.color,
             fields=[
@@ -477,42 +515,21 @@ async def member_count(ctx: discord.ApplicationContext):
 
 @dave_bot.message_command(name="Poll", guild_ids=[GUILD])
 async def poll(ctx: discord.ApplicationContext, message: discord.Message):
-    if ctx.bot.user is None:
-        raise RuntimeError("Bot user is not available")
     await ctx.respond("Removing reactions...", ephemeral=True)
-    await asyncio.gather(
-        *(reaction.remove(ctx.bot.user) for reaction in message.reactions)
-    )
+    await _clear_bot_reactions(ctx, message)
 
     await ctx.respond("Reacting...", ephemeral=True)
-    for emoji in (
-        emoji
-        for emoji, pos in sorted(
-            chain(
-                ((emoji, message.content.find(str(emoji))) for emoji in ctx.bot.emojis),
-                (
-                    (match["emoji"], match["match_start"])
-                    for match in emoji_list(message.content)
-                ),
-            ),
-            key=lambda x: x[1],
-        )
-        if pos != -1
-    ):
+    for emoji in _ordered_poll_emojis(message.content, ctx.bot.emojis):
         await message.add_reaction(emoji)
 
-    await ctx.respond(f"Done {EMOJIS['thumbsupdirk']()}", ephemeral=True)
+    await ctx.respond(f"Done {_emoji('thumbsupdirk')}", ephemeral=True)
 
 
 @dave_bot.message_command(name="Unreact", guild_ids=[GUILD])
 async def unreact(ctx: discord.ApplicationContext, message: discord.Message):
-    if ctx.bot.user is None:
-        raise RuntimeError("Bot user is not available")
     await ctx.respond("Removing reactions...", ephemeral=True)
-    await asyncio.gather(
-        *(reaction.remove(ctx.bot.user) for reaction in message.reactions)
-    )
-    await ctx.respond(f"Done {EMOJIS['thumbsupdirk']()}", ephemeral=True)
+    await _clear_bot_reactions(ctx, message)
+    await ctx.respond(f"Done {_emoji('thumbsupdirk')}", ephemeral=True)
 
 
 def run_bot(token: str) -> None:

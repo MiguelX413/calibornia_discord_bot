@@ -32,5 +32,4 @@ Run:
 Notes:
 
 - The bot accepts `TOKEN` and still falls back to the older lowercase `token` environment variable.
-- Dependency pins in `requirements.txt` were updated to current releases on July 24, 2026.
-- `requirements.txt` is retained as a compatibility snapshot, but `pyproject.toml` and `uv.lock` are now the source of truth.
+- `pyproject.toml` and `uv.lock` are the source of truth for dependencies.
