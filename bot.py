@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import asyncio
 import logging
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -44,6 +44,7 @@ type EmojiResolver = Callable[
     [], discord.Emoji | discord.PartialEmoji | discord.AppEmoji | None
 ]
 type EmbedAuthor = discord.User | discord.Member
+type PollEmoji = str | discord.Emoji | discord.AppEmoji
 
 
 def _guild(bot: discord.Bot) -> discord.Guild:
@@ -82,22 +83,16 @@ def _member_role(member: discord.Member, role_name: str) -> discord.Role:
     return _role(member.guild, ROLES[role_name])
 
 
-def _embed_field(name: str, value: object) -> discord.EmbedField:
-    return discord.EmbedField(name, str(value))
-
-
 def _set_embed_author(embed: discord.Embed, user: EmbedAuthor) -> None:
     embed.set_author(
         name=f"{user} ({user.mention})",
         url=f"https://discordapp.com/users/{user.id}",
-        icon_url=user.avatar,
+        icon_url=user.display_avatar.url,
     )
 
 
 def _message_reference_id(message: discord.Message) -> int | None:
-    if message.reference is None:
-        return None
-    return message.reference.message_id
+    return message.reference.message_id if message.reference else None
 
 
 def _message_author_color(message: discord.Message) -> discord.Colour:
@@ -107,78 +102,65 @@ def _message_author_color(message: discord.Message) -> discord.Colour:
     return discord.Colour.default()
 
 
-def msg_embed(message: discord.Message) -> discord.Embed:
-    fields = [
-        _embed_field("Message ID", message.id),
-        _embed_field("Channel ID", message.channel.id),
-    ]
-    if (reference_id := _message_reference_id(message)) is not None:
-        fields.append(_embed_field("Reference", reference_id))
+def _new_message_embed(message: discord.Message) -> discord.Embed:
     embed = discord.Embed(
         description=message.content,
         color=_message_author_color(message),
         timestamp=message.created_at,
-        fields=fields,
     )
+    embed.add_field(name="Message ID", value=str(message.id))
+    embed.add_field(name="Channel ID", value=str(message.channel.id))
+    if (reference_id := _message_reference_id(message)) is not None:
+        embed.add_field(name="Reference", value=str(reference_id))
     _set_embed_author(embed, message.author)
     return embed
 
 
-async def _on_message_forward(bot: discord.Bot, message: discord.Message):
+async def _on_message_forward(bot: discord.Bot, message: discord.Message) -> None:
+    if bot.application_id == message.author.id or message.guild is not None:
+        return
+
+    embed = _new_message_embed(message)
+    files = [
+        await attachment.to_file(use_cached=True) for attachment in message.attachments
+    ]
+    channel = _text_channel(bot, CHANNELS["davebot"])
+    try:
+        await channel.send(embed=embed, files=files, stickers=message.stickers)
+    except discord.errors.Forbidden:
+        await channel.send(
+            content=(
+                "Message contained sticker which cannot be sent here.\n"
+                f"Stickers: {message.stickers}"
+            ),
+            embed=embed,
+            files=files,
+        )
+
+
+async def _on_message_react(bot: discord.Bot, message: discord.Message) -> None:
     if bot.application_id == message.author.id:
         return
 
-    if message.guild is None:
-        embed = msg_embed(message)
-        files = [
-            (await attachment.to_file(use_cached=True))
-            for attachment in message.attachments
-        ]
-        try:
-            await _text_channel(bot, CHANNELS["davebot"]).send(
-                embed=embed, files=files, stickers=message.stickers
-            )
-        except discord.errors.Forbidden:
-            await _text_channel(bot, CHANNELS["davebot"]).send(
-                content=(
-                    "Message contained sticker which cannot be sent here.\n"
-                    f"Stickers: {message.stickers}"
-                ),
-                embed=embed,
-                files=files,
-            )
-
-
-async def _on_message_react(bot: discord.Bot, message: discord.Message):
-    if bot.application_id == message.author.id:
-        return
-
-    emojis = _triggered_emojis(message.content)
+    triggered_emojis = _triggered_emojis(message.content)
     if message.channel.id == CHANNELS["spam"]:
-        reply = "".join(str(emoji()) for emoji in emojis)
+        reply = "".join(str(_emoji_by_factory(emoji)) for emoji in triggered_emojis)
         if reply:
             await message.reply(reply)
-    else:
-        for emoji in emojis:
-            await message.add_reaction(_emoji_by_factory(emoji))
+        return
 
-
-def _emoji_by_factory(
-    factory: EmojiResolver,
-) -> discord.Emoji | discord.PartialEmoji | discord.AppEmoji:
-    for name, candidate in EMOJIS.items():
-        if candidate is factory:
-            return _emoji(name)
-    raise RuntimeError("Emoji factory is not registered")
+    for emoji in triggered_emojis:
+        await message.add_reaction(_emoji_by_factory(emoji))
 
 
 class DaveBot(discord.Bot):
-    async def on_message(self, message: discord.Message):
+    async def on_message(self, message: discord.Message) -> None:
         await asyncio.gather(
-            _on_message_forward(self, message), _on_message_react(self, message)
+            _on_message_forward(self, message),
+            _on_message_react(self, message),
         )
 
-    async def on_member_join(self, member: discord.Member):
+    async def on_member_join(self, member: discord.Member) -> None:
         current_member_count = non_bot_member_count(member.guild.members)
         welcome_msg = (
             f"Welcome to hell, {member.mention}! We now number {current_member_count}!"
@@ -201,9 +183,8 @@ class DaveBot(discord.Bot):
             ),
         )
 
-    async def on_member_remove(self, member: discord.Member):
-        channel = _text_channel(self, JOIN_LEAVE_MSG_CHANNEL)
-        await channel.send(
+    async def on_member_remove(self, member: discord.Member) -> None:
+        await _text_channel(self, JOIN_LEAVE_MSG_CHANNEL).send(
             f"{_emoji('vriska')} {member.mention} couldn't bear the torture. "
             "Our population lowers to "
             f"{non_bot_member_count(member.guild.members)}. They'll be back."
@@ -221,6 +202,8 @@ EMOJIS: dict[str, EmojiResolver] = {
     "jadedab": lambda: dave_bot.get_emoji(1023722987834331156),
 }
 
+EMOJI_NAMES_BY_FACTORY = {factory: name for name, factory in EMOJIS.items()}
+
 DEFAULT_JOIN_ROLE_NAMES = (
     "color_divider",
     "location_divider",
@@ -232,53 +215,56 @@ DEFAULT_JOIN_ROLE_NAMES = (
 )
 
 EMOJI_TRIGGERS = {
-    emoji: list(trigger.casefold() for trigger in triggers)
+    emoji: tuple(trigger.casefold() for trigger in triggers)
     for emoji, triggers in [
-        (EMOJIS["vriska"], ["vriska", "serket"]),
-        (EMOJIS["johndab"], ["john", "egbert"]),
-        (EMOJIS["rosedab"], ["rose", "lalonde"]),
-        (EMOJIS["davedab"], ["dave", "strider"]),
-        (EMOJIS["jadedab"], ["jade", "harley"]),
+        (EMOJIS["vriska"], ("vriska", "serket")),
+        (EMOJIS["johndab"], ("john", "egbert")),
+        (EMOJIS["rosedab"], ("rose", "lalonde")),
+        (EMOJIS["davedab"], ("dave", "strider")),
+        (EMOJIS["jadedab"], ("jade", "harley")),
     ]
 }
 
 
-def non_bot_member_count(members: list[discord.Member]) -> int:
+def _emoji_by_factory(
+    factory: EmojiResolver,
+) -> discord.Emoji | discord.PartialEmoji | discord.AppEmoji:
+    try:
+        return _emoji(EMOJI_NAMES_BY_FACTORY[factory])
+    except KeyError as exc:
+        raise RuntimeError("Emoji factory is not registered") from exc
+
+
+def non_bot_member_count(members: Iterable[discord.Member]) -> int:
     return sum(not member.bot for member in members)
 
 
 def _first_trigger_position(message: str, triggers: Iterable[str]) -> int | None:
-    positions = (message.find(trigger) for trigger in triggers)
-    matches = [position for position in positions if position != -1]
-    if not matches:
-        return None
-    return min(matches)
+    matches = [
+        position for trigger in triggers if (position := message.find(trigger)) != -1
+    ]
+    return min(matches, default=None)
 
 
 def _triggered_emojis(message: str) -> list[EmojiResolver]:
     casefolded_message = message.casefold()
-    return [
-        emoji
-        for emoji, position in sorted(
-            (
-                (emoji, _first_trigger_position(casefolded_message, triggers))
-                for emoji, triggers in EMOJI_TRIGGERS.items()
-            ),
-            key=lambda item: item[1] if item[1] is not None else float("inf"),
-        )
-        if position is not None
+    matches = [
+        (emoji, position)
+        for emoji, triggers in EMOJI_TRIGGERS.items()
+        if (position := _first_trigger_position(casefolded_message, triggers))
+        is not None
     ]
+    return [emoji for emoji, _ in sorted(matches, key=lambda item: item[1])]
 
 
 def _ordered_poll_emojis(
     message: str,
     custom_emojis: Iterable[discord.Emoji | discord.AppEmoji],
-) -> list[str | discord.Emoji | discord.AppEmoji]:
-    emoji_positions: dict[str | discord.Emoji | discord.AppEmoji, int] = {}
+) -> list[PollEmoji]:
+    emoji_positions: dict[PollEmoji, int] = {}
 
     for emoji in custom_emojis:
-        position = message.find(str(emoji))
-        if position != -1:
+        if (position := message.find(str(emoji))) != -1:
             emoji_positions[emoji] = position
 
     for match in emoji_list(message):
@@ -290,7 +276,8 @@ def _ordered_poll_emojis(
 
 
 async def _clear_bot_reactions(
-    ctx: discord.ApplicationContext, message: discord.Message
+    ctx: discord.ApplicationContext,
+    message: discord.Message,
 ) -> None:
     if ctx.bot.user is None:
         raise RuntimeError("Bot user is not available")
@@ -305,12 +292,15 @@ def _chunk_lines(lines: Iterable[str], limit: int = 2000) -> list[str]:
     pending_length = 0
 
     for line in lines:
-        if pending_length + len(line) + len(pending_lines) > limit:
+        line_length = len(line)
+        separator_length = 1 if pending_lines else 0
+        if pending_lines and pending_length + separator_length + line_length > limit:
             chunks.append("\n".join(pending_lines))
             pending_lines = []
             pending_length = 0
+
         pending_lines.append(line)
-        pending_length += len(line)
+        pending_length += line_length + (1 if len(pending_lines) > 1 else 0)
 
     if pending_lines:
         chunks.append("\n".join(pending_lines))
@@ -318,48 +308,63 @@ def _chunk_lines(lines: Iterable[str], limit: int = 2000) -> list[str]:
     return chunks
 
 
+def _target_label(messageable: MessageTarget) -> str:
+    if isinstance(messageable, discord.TextChannel | discord.User):
+        return f"{messageable} ({messageable.mention})"
+    return str(messageable)
+
+
+def _sent_message_embed(
+    message: discord.Message,
+    *,
+    author: EmbedAuthor,
+    target: str,
+) -> discord.Embed:
+    embed = discord.Embed(
+        title=f"To {target}",
+        description=message.content,
+        color=author.color if isinstance(author, discord.Member) else None,
+        timestamp=message.created_at,
+    )
+    embed.add_field(name="Message ID", value=str(message.id))
+    embed.add_field(name="Channel ID", value=str(message.channel.id))
+    _set_embed_author(embed, author)
+    return embed
+
+
 staff_only = has_any_role(ROLES["mod"], ROLES["admin"])
 
 
 async def msg(
-    ctx: discord.ApplicationContext, messageable: MessageTarget, message: str
-):
+    ctx: discord.ApplicationContext,
+    messageable: MessageTarget,
+    message: str,
+) -> None:
     if ctx.channel_id != CHANNELS["davebot"]:
         await ctx.respond(
-            f"U gotta run this command in <#{CHANNELS['davebot']}>", ephemeral=True
-        )
-        return
-    if messageable == dave_bot.user:
-        await ctx.respond(
-            "Lmao why did u try to message me",
+            f"U gotta run this command in <#{CHANNELS['davebot']}>",
             ephemeral=True,
         )
         return
+    if messageable == dave_bot.user:
+        await ctx.respond("Lmao why did u try to message me", ephemeral=True)
+        return
+
     try:
         sent = await messageable.send(message)
-        target = (
-            f"{messageable} ({messageable.mention})"
-            if isinstance(messageable, discord.TextChannel | discord.User)
-            else str(messageable)
-        )
-        embed = discord.Embed(
-            title=f"To {target}",
-            description=message,
-            color=ctx.user.color,
-            fields=[
-                _embed_field("Message ID", sent.id),
-                _embed_field("Channel ID", sent.channel.id),
-            ],
-            timestamp=sent.created_at,
-        )
-        _set_embed_author(embed, ctx.user)
-        await asyncio.gather(
-            _text_channel(dave_bot, CHANNELS["davebot"]).send(embed=embed),
-            ctx.respond("Sent", ephemeral=True),
-        )
-    except discord.ApplicationCommandInvokeError as e:
-        await ctx.respond(f"Error:\n{e}", ephemeral=True)
+    except discord.ApplicationCommandInvokeError as exc:
+        await ctx.respond(f"Error:\n{exc}", ephemeral=True)
         raise
+
+    embed = _sent_message_embed(
+        sent,
+        author=ctx.user,
+        target=_target_label(messageable),
+    )
+    await asyncio.gather(
+        _text_channel(dave_bot, CHANNELS["davebot"]).send(embed=embed),
+        ctx.respond("Sent", ephemeral=True),
+    )
 
 
 message_cmds = dave_bot.create_group("message", "Sends messages as bot")
@@ -367,15 +372,21 @@ message_cmds = dave_bot.create_group("message", "Sends messages as bot")
 
 @message_cmds.command()
 @staff_only
-async def user(ctx: discord.ApplicationContext, user: discord.User, message: str):
+async def user(
+    ctx: discord.ApplicationContext,
+    user: discord.User,
+    message: str,
+) -> None:
     await msg(ctx, user, message)
 
 
 @message_cmds.command()
 @staff_only
 async def channel(
-    ctx: discord.ApplicationContext, channel: discord.TextChannel, message: str
-):
+    ctx: discord.ApplicationContext,
+    channel: discord.TextChannel,
+    message: str,
+) -> None:
     await msg(ctx, channel, message)
 
 
@@ -388,8 +399,10 @@ class VerificationView(discord.ui.View):
 
     @discord.ui.button(label="Verify without intro")
     async def button_callback(
-        self, button: discord.ui.Button[Any], interaction: discord.Interaction
-    ):
+        self,
+        button: discord.ui.Button[Any],
+        interaction: discord.Interaction,
+    ) -> None:
         del button
         if interaction.guild is None:
             raise RuntimeError("Verification interaction must happen in a guild")
@@ -397,7 +410,8 @@ class VerificationView(discord.ui.View):
             raise RuntimeError("Verification interaction must have a user")
         if _has_role(self.member, ROLES["member"]):
             await interaction.response.send_message(
-                "User already verified", ephemeral=True
+                "User already verified",
+                ephemeral=True,
             )
             return
 
@@ -410,7 +424,8 @@ class VerificationView(discord.ui.View):
                 "Congratulations, you're now verified! Welcome to the server!"
             ),
             interaction.response.send_message(
-                str(_emoji("thumbsupdirk")), ephemeral=True
+                str(_emoji("thumbsupdirk")),
+                ephemeral=True,
             ),
             _text_channel(dave_bot, CHANNELS["modlog"]).send(
                 f"{interaction.user.mention} verified"
@@ -423,21 +438,18 @@ async def _verify(
     ctx: discord.ApplicationContext,
     member: discord.Member | discord.User,
     message: discord.Message | None = None,
-):
+) -> None:
     if ctx.guild is None:
         raise RuntimeError("Verification commands must run in a guild")
     if member.id == dave_bot.application_id:
         await ctx.respond("You can't verify me!", ephemeral=True)
         return
-
     if not isinstance(member, discord.Member):
         await ctx.respond("User no longer in the server", ephemeral=True)
         return
-
     if _has_role(member, ROLES["member"]):
         await ctx.respond("User already verified", ephemeral=True)
         return
-
     if message is None:
         await ctx.respond(
             "Are you sure you want to verify this user without an intro?",
@@ -455,7 +467,7 @@ async def _verify(
         ctx.respond(str(_emoji("thumbsupdirk")), ephemeral=True),
         _text_channel(dave_bot, CHANNELS["modlog"]).send(
             f"{ctx.user.mention} verified {member.mention}",
-            embed=msg_embed(message),
+            embed=_new_message_embed(message),
         ),
         message.add_reaction(_emoji("thumbsupdirk")),
     )
@@ -464,29 +476,31 @@ async def _verify(
 @dave_bot.user_command(name="Verify without intro", guild_ids=[GUILD])
 @staff_only
 async def user_verify(
-    ctx: discord.ApplicationContext, user: discord.Member | discord.User
-):
+    ctx: discord.ApplicationContext,
+    user: discord.Member | discord.User,
+) -> None:
     await _verify(ctx, user)
 
 
 @dave_bot.message_command(name="Verify", guild_ids=[GUILD])
 @staff_only
-async def msg_verify(ctx: discord.ApplicationContext, message: discord.Message):
+async def msg_verify(ctx: discord.ApplicationContext, message: discord.Message) -> None:
     await _verify(ctx, message.author, message)
 
 
 @dave_bot.slash_command(name="list_unverified", description="Lists unverified members")
 @staff_only
-async def list_unverified(ctx: discord.ApplicationContext):
+async def list_unverified(ctx: discord.ApplicationContext) -> None:
     if ctx.guild is None:
         raise RuntimeError("This command must run in a guild")
+
     unverified_members = sorted(
         (
             member
             for member in ctx.guild.members
-            if (not member.bot)
+            if not member.bot
             and member.joined_at is not None
-            and (not _has_role(member, ROLES["member"]))
+            and not _has_role(member, ROLES["member"])
         ),
         key=lambda member: member.joined_at or datetime.min.replace(tzinfo=UTC),
     )
@@ -500,9 +514,10 @@ async def list_unverified(ctx: discord.ApplicationContext):
 
 
 @dave_bot.slash_command(
-    name="member_count", description="The amount of non-bot members."
+    name="member_count",
+    description="The amount of non-bot members.",
 )
-async def member_count(ctx: discord.ApplicationContext):
+async def member_count(ctx: discord.ApplicationContext) -> None:
     if ctx.guild is None:
         raise RuntimeError("This command must run in a guild")
     await ctx.respond(
@@ -513,20 +528,28 @@ async def member_count(ctx: discord.ApplicationContext):
     )
 
 
-@dave_bot.message_command(name="Poll", guild_ids=[GUILD])
-async def poll(ctx: discord.ApplicationContext, message: discord.Message):
-    await ctx.respond("Removing reactions...", ephemeral=True)
-    await _clear_bot_reactions(ctx, message)
-
-    await ctx.respond("Reacting...", ephemeral=True)
-    for emoji in _ordered_poll_emojis(message.content, ctx.bot.emojis):
+async def _add_reactions_in_order(
+    message: discord.Message,
+    emojis: Sequence[PollEmoji],
+) -> None:
+    for emoji in emojis:
         await message.add_reaction(emoji)
 
+
+@dave_bot.message_command(name="Poll", guild_ids=[GUILD])
+async def poll(ctx: discord.ApplicationContext, message: discord.Message) -> None:
+    await ctx.respond("Removing reactions...", ephemeral=True)
+    await _clear_bot_reactions(ctx, message)
+    await ctx.respond("Reacting...", ephemeral=True)
+    await _add_reactions_in_order(
+        message,
+        _ordered_poll_emojis(message.content, ctx.bot.emojis),
+    )
     await ctx.respond(f"Done {_emoji('thumbsupdirk')}", ephemeral=True)
 
 
 @dave_bot.message_command(name="Unreact", guild_ids=[GUILD])
-async def unreact(ctx: discord.ApplicationContext, message: discord.Message):
+async def unreact(ctx: discord.ApplicationContext, message: discord.Message) -> None:
     await ctx.respond("Removing reactions...", ephemeral=True)
     await _clear_bot_reactions(ctx, message)
     await ctx.respond(f"Done {_emoji('thumbsupdirk')}", ephemeral=True)
