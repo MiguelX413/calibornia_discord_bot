@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import asyncio
 import logging
-import os
 from datetime import UTC, datetime
 from itertools import chain
 from typing import Any
@@ -10,6 +9,8 @@ import discord
 from discord.ext.commands import has_any_role
 from discord.utils import format_dt
 from emoji import emoji_list
+
+from config import load_config
 
 GUILD = 980962249550213170
 
@@ -494,11 +495,9 @@ def run_bot(token: str) -> None:
 
 
 def main() -> None:
-    token = os.getenv("TOKEN") or os.getenv("token")
-    if not isinstance(token, str):
-        raise TypeError("No Token")
+    config = load_config()
     logging.basicConfig(level=logging.INFO)
-    run_bot(token)
+    run_bot(config.token)
 
 
 if __name__ == "__main__":

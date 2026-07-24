@@ -29,7 +29,7 @@ select = ["E", "F", "I", "UP"]
 
 [tool.mypy]
 python_version = "3.14"
-files = ["bot.py"]
+files = ["bot.py", "config.py"]
 ignore_missing_imports = true
 check_untyped_defs = true
 warn_redundant_casts = true
