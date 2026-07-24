@@ -2,12 +2,12 @@
 import asyncio
 import logging
 import os
+from datetime import UTC, datetime
 from itertools import chain
-from typing import TypeAlias
+from typing import Any
 
 import discord
 from discord.ext.commands import has_any_role
-from discord.ui import Item
 from discord.utils import format_dt
 from emoji import emoji_list
 
@@ -37,7 +37,7 @@ ROLES = {
 }
 
 JOIN_LEAVE_MSG_CHANNEL = CHANNELS["general"]
-MessageTarget: TypeAlias = discord.abc.Messageable
+type MessageTarget = discord.abc.Messageable
 
 
 def _guild(bot: discord.Bot) -> discord.Guild:
@@ -47,10 +47,10 @@ def _guild(bot: discord.Bot) -> discord.Guild:
     return guild
 
 
-def _channel(bot: discord.Bot, channel_id: int) -> discord.abc.GuildChannel:
+def _text_channel(bot: discord.Bot, channel_id: int) -> discord.TextChannel:
     channel = _guild(bot).get_channel(channel_id)
-    if channel is None:
-        raise RuntimeError(f"Channel {channel_id} is not available")
+    if not isinstance(channel, discord.TextChannel):
+        raise RuntimeError(f"Channel {channel_id} is not an available text channel")
     return channel
 
 
@@ -59,6 +59,13 @@ def _role(guild: discord.Guild, role_id: int) -> discord.Role:
     if role is None:
         raise RuntimeError(f"Role {role_id} is not available")
     return role
+
+
+def _emoji(name: str) -> discord.Emoji | discord.PartialEmoji | discord.AppEmoji:
+    emoji = EMOJIS[name]()
+    if emoji is None:
+        raise RuntimeError(f"Emoji {name} is not available")
+    return emoji
 
 
 def msg_embed(message: discord.Message) -> discord.Embed:
@@ -95,12 +102,15 @@ async def _on_message_forward(bot: discord.Bot, message: discord.Message):
             for attachment in message.attachments
         ]
         try:
-            await _channel(bot, CHANNELS["davebot"]).send(
+            await _text_channel(bot, CHANNELS["davebot"]).send(
                 embed=embed, files=files, stickers=message.stickers
             )
         except discord.errors.Forbidden:
-            await _channel(bot, CHANNELS["davebot"]).send(
-                content=f"Message contained sticker which cannot be sent here.\nStickers: {message.stickers}",
+            await _text_channel(bot, CHANNELS["davebot"]).send(
+                content=(
+                    "Message contained sticker which cannot be sent here.\n"
+                    f"Stickers: {message.stickers}"
+                ),
                 embed=embed,
                 files=files,
             )
@@ -141,7 +151,16 @@ async def _on_message_react(bot: discord.Bot, message: discord.Message):
             await message.reply(reply)
     else:
         for emoji in emojis:
-            await message.add_reaction(emoji())
+            await message.add_reaction(_emoji_by_factory(emoji))
+
+
+def _emoji_by_factory(
+    factory: Any,
+) -> discord.Emoji | discord.PartialEmoji | discord.AppEmoji:
+    for name, candidate in EMOJIS.items():
+        if candidate is factory:
+            return _emoji(name)
+    raise RuntimeError("Emoji factory is not registered")
 
 
 class DaveBot(discord.Bot):
@@ -154,11 +173,12 @@ class DaveBot(discord.Bot):
         _non_bot_member_count = non_bot_member_count(member.guild.members)
         welcome_msg = (
             f"Welcome to hell, {member.mention}! We now number {_non_bot_member_count}!"
-            f" Check out <#{CHANNELS['welcome-and-rules']}> and <#{CHANNELS['intros']}> to get verified and"
+            f" Check out <#{CHANNELS['welcome-and-rules']}>"
+            f" and <#{CHANNELS['intros']}> to get verified and"
             f" check out <id:customize> to get roles!"
         )
         await asyncio.gather(
-            _channel(self, JOIN_LEAVE_MSG_CHANNEL).send(
+            _text_channel(self, JOIN_LEAVE_MSG_CHANNEL).send(
                 f"{member.mention} is number 413... the holy number..."
                 if _non_bot_member_count == 413
                 else welcome_msg
@@ -181,9 +201,10 @@ class DaveBot(discord.Bot):
         )
 
     async def on_member_remove(self, member: discord.Member):
-        channel = _channel(self, JOIN_LEAVE_MSG_CHANNEL)
+        channel = _text_channel(self, JOIN_LEAVE_MSG_CHANNEL)
         await channel.send(
-            f"{EMOJIS['vriska']()} {member.mention} couldn't bear the torture. Our population lowers to "
+            f"{_emoji('vriska')} {member.mention} couldn't bear the torture. "
+            "Our population lowers to "
             f"{non_bot_member_count(member.guild.members)}. They'll be back."
         )
 
@@ -254,7 +275,7 @@ async def msg(
             icon_url=ctx.user.avatar,
         )
         await asyncio.gather(
-            _channel(dave_bot, CHANNELS["davebot"]).send(embed=embed),
+            _text_channel(dave_bot, CHANNELS["davebot"]).send(embed=embed),
             ctx.respond("Sent", ephemeral=True),
         )
     except discord.ApplicationCommandInvokeError as e:
@@ -282,14 +303,19 @@ async def channel(
 class VerificationView(discord.ui.View):
     member: discord.Member
 
-    def __init__(self, member: discord.Member, *items: Item) -> None:
-        super().__init__(*items)
+    def __init__(self, member: discord.Member) -> None:
+        super().__init__()
         self.member = member
 
     @discord.ui.button(label="Verify without intro")
     async def button_callback(
-        self, button: discord.Button, interaction: discord.Interaction
+        self, button: discord.ui.Button[Any], interaction: discord.Interaction
     ):
+        del button
+        if interaction.guild is None:
+            raise RuntimeError("Verification interaction must happen in a guild")
+        if interaction.user is None:
+            raise RuntimeError("Verification interaction must have a user")
         if ROLES["member"] in (role.id for role in self.member.roles):
             await interaction.response.send_message(
                 "User already verified", ephemeral=True
@@ -305,10 +331,11 @@ class VerificationView(discord.ui.View):
                 "Congratulations, you're now verified! Welcome to the server!"
             ),
             interaction.response.send_message(
-                str(EMOJIS["thumbsupdirk"]()), ephemeral=True
+                str(_emoji("thumbsupdirk")), ephemeral=True
             ),
-            _channel(dave_bot, CHANNELS["modlog"]).send(
-                f"{interaction.user.mention} verified {self.member.mention} without an intro",
+            _text_channel(dave_bot, CHANNELS["modlog"]).send(
+                f"{interaction.user.mention} verified"
+                f" {self.member.mention} without an intro",
             ),
         )
 
@@ -318,6 +345,8 @@ async def _verify(
     member: discord.Member | discord.User,
     message: discord.Message | None = None,
 ):
+    if ctx.guild is None:
+        raise RuntimeError("Verification commands must run in a guild")
     if member.id == dave_bot.application_id:
         await ctx.respond("You can't verify me!", ephemeral=True)
         return
@@ -344,12 +373,12 @@ async def _verify(
     )
     await asyncio.gather(
         member.send("Congratulations, you're now verified! Welcome to the server!"),
-        ctx.respond(str(EMOJIS["thumbsupdirk"]()), ephemeral=True),
-        _channel(dave_bot, CHANNELS["modlog"]).send(
+        ctx.respond(str(_emoji("thumbsupdirk")), ephemeral=True),
+        _text_channel(dave_bot, CHANNELS["modlog"]).send(
             f"{ctx.user.mention} verified {member.mention}",
             embed=msg_embed(message),
         ),
-        message.add_reaction(EMOJIS["thumbsupdirk"]()),
+        message.add_reaction(_emoji("thumbsupdirk")),
     )
 
 
@@ -370,19 +399,24 @@ async def msg_verify(ctx: discord.ApplicationContext, message: discord.Message):
 @dave_bot.slash_command(name="list_unverified", description="Lists unverified members")
 @staff_only
 async def list_unverified(ctx: discord.ApplicationContext):
+    if ctx.guild is None:
+        raise RuntimeError("This command must run in a guild")
+    unverified_members = sorted(
+        (
+            member
+            for member in ctx.guild.members
+            if (not member.bot)
+            and member.joined_at is not None
+            and (ROLES["member"] not in (role.id for role in member.roles))
+        ),
+        key=lambda member: member.joined_at or datetime.min.replace(tzinfo=UTC),
+    )
     entries = (
         f"{member.mention}: {format_dt(member.joined_at)}"
-        for member in sorted(
-            (
-                member
-                for member in ctx.guild.members
-                if (not member.bot)
-                and (ROLES["member"] not in (role.id for role in member.roles))
-            ),
-            key=lambda member: member.joined_at,
-        )
+        for member in unverified_members
+        if member.joined_at is not None
     )
-    queue = []
+    queue: list[str] = []
     queue_total_len = 0
     for entry in entries:
         if queue_total_len + len(entry) + len(queue) > 2000:
@@ -405,8 +439,11 @@ async def list_unverified(ctx: discord.ApplicationContext):
     name="member_count", description="The amount of non-bot members."
 )
 async def member_count(ctx: discord.ApplicationContext):
+    if ctx.guild is None:
+        raise RuntimeError("This command must run in a guild")
     await ctx.respond(
-        f"There are currently {non_bot_member_count(ctx.guild.members)} non-bot members out of {len(ctx.guild.members)}"
+        f"There are currently {non_bot_member_count(ctx.guild.members)}"
+        f" non-bot members out of {len(ctx.guild.members)}"
         " in the server.",
         ephemeral=True,
     )
@@ -414,6 +451,8 @@ async def member_count(ctx: discord.ApplicationContext):
 
 @dave_bot.message_command(name="Poll", guild_ids=[GUILD])
 async def poll(ctx: discord.ApplicationContext, message: discord.Message):
+    if ctx.bot.user is None:
+        raise RuntimeError("Bot user is not available")
     await ctx.respond("Removing reactions...", ephemeral=True)
     await asyncio.gather(
         *(reaction.remove(ctx.bot.user) for reaction in message.reactions)
@@ -441,6 +480,8 @@ async def poll(ctx: discord.ApplicationContext, message: discord.Message):
 
 @dave_bot.message_command(name="Unreact", guild_ids=[GUILD])
 async def unreact(ctx: discord.ApplicationContext, message: discord.Message):
+    if ctx.bot.user is None:
+        raise RuntimeError("Bot user is not available")
     await ctx.respond("Removing reactions...", ephemeral=True)
     await asyncio.gather(
         *(reaction.remove(ctx.bot.user) for reaction in message.reactions)

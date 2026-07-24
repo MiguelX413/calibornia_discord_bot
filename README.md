@@ -2,25 +2,35 @@
 
 Discord bot for the Calibornia Discord.
 
+This repository now uses `uv` for dependency management.
+
+The `uv.lock` file should be committed for reproducible installs.
+
 Current runtime:
 
 - Python 3.14
 - `py-cord`
 - `emoji`
 
-Setup with `pip`:
+Setup:
 
-- `python -m venv .venv`
-- `source .venv/bin/activate`
-- `python -m pip install -U pip`
-- `python -m pip install -r requirements.txt`
+- `uv sync --group dev`
+
+Basic commands:
+
+- `uv run python -m py_compile bot.py`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run mypy`
+- `uv run python bot.py`
 
 Run:
 
 - `export TOKEN=...`
-- `python bot.py`
+- `uv run python bot.py`
 
 Notes:
 
 - The bot accepts `TOKEN` and still falls back to the older lowercase `token` environment variable.
 - Dependency pins in `requirements.txt` were updated to current releases on July 24, 2026.
+- `requirements.txt` is retained as a compatibility snapshot, but `pyproject.toml` and `uv.lock` are now the source of truth.
