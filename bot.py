@@ -3,7 +3,7 @@ import asyncio
 import logging
 import os
 from itertools import chain
-from typing import List, Optional, Union
+from typing import TypeAlias
 
 import discord
 from discord.ext.commands import has_any_role
@@ -37,6 +37,28 @@ ROLES = {
 }
 
 JOIN_LEAVE_MSG_CHANNEL = CHANNELS["general"]
+MessageTarget: TypeAlias = discord.abc.Messageable
+
+
+def _guild(bot: discord.Bot) -> discord.Guild:
+    guild = bot.get_guild(GUILD)
+    if guild is None:
+        raise RuntimeError(f"Bot is not connected to guild {GUILD}")
+    return guild
+
+
+def _channel(bot: discord.Bot, channel_id: int) -> discord.abc.GuildChannel:
+    channel = _guild(bot).get_channel(channel_id)
+    if channel is None:
+        raise RuntimeError(f"Channel {channel_id} is not available")
+    return channel
+
+
+def _role(guild: discord.Guild, role_id: int) -> discord.Role:
+    role = guild.get_role(role_id)
+    if role is None:
+        raise RuntimeError(f"Role {role_id} is not available")
+    return role
 
 
 def msg_embed(message: discord.Message) -> discord.Embed:
@@ -73,11 +95,11 @@ async def _on_message_forward(bot: discord.Bot, message: discord.Message):
             for attachment in message.attachments
         ]
         try:
-            await bot.get_guild(GUILD).get_channel(CHANNELS["davebot"]).send(
+            await _channel(bot, CHANNELS["davebot"]).send(
                 embed=embed, files=files, stickers=message.stickers
             )
         except discord.errors.Forbidden:
-            await bot.get_guild(GUILD).get_channel(CHANNELS["davebot"]).send(
+            await _channel(bot, CHANNELS["davebot"]).send(
                 content=f"Message contained sticker which cannot be sent here.\nStickers: {message.stickers}",
                 embed=embed,
                 files=files,
@@ -113,9 +135,9 @@ async def _on_message_react(bot: discord.Bot, message: discord.Message):
         )
         if pos != -1
     )
-    if message.channel.id in [CHANNELS["spam"]]:
+    if message.channel.id == CHANNELS["spam"]:
         reply = "".join(str(emoji()) for emoji in emojis)
-        if len(reply) > 0:
+        if reply:
             await message.reply(reply)
     else:
         for emoji in emojis:
@@ -136,7 +158,7 @@ class DaveBot(discord.Bot):
             f" check out <id:customize> to get roles!"
         )
         await asyncio.gather(
-            self.get_channel(JOIN_LEAVE_MSG_CHANNEL).send(
+            _channel(self, JOIN_LEAVE_MSG_CHANNEL).send(
                 f"{member.mention} is number 413... the holy number..."
                 if _non_bot_member_count == 413
                 else welcome_msg
@@ -144,7 +166,7 @@ class DaveBot(discord.Bot):
             member.send(welcome_msg),
             member.add_roles(
                 *(
-                    member.guild.get_role(role)
+                    _role(member.guild, role)
                     for role in [
                         ROLES["color_divider"],
                         ROLES["location_divider"],
@@ -159,7 +181,7 @@ class DaveBot(discord.Bot):
         )
 
     async def on_member_remove(self, member: discord.Member):
-        channel = self.get_channel(JOIN_LEAVE_MSG_CHANNEL)
+        channel = _channel(self, JOIN_LEAVE_MSG_CHANNEL)
         await channel.send(
             f"{EMOJIS['vriska']()} {member.mention} couldn't bear the torture. Our population lowers to "
             f"{non_bot_member_count(member.guild.members)}. They'll be back."
@@ -189,15 +211,15 @@ EMOJI_TRIGGERS = {
 }
 
 
-def non_bot_member_count(members: List[discord.Member]) -> int:
-    return sum(1 if not member.bot else 0 for member in members)
+def non_bot_member_count(members: list[discord.Member]) -> int:
+    return sum(not member.bot for member in members)
 
 
 staff_only = has_any_role(ROLES["mod"], ROLES["admin"])
 
 
 async def msg(
-    ctx: discord.ApplicationContext, messageable: discord.abc.Messageable, message: str
+    ctx: discord.ApplicationContext, messageable: MessageTarget, message: str
 ):
     if ctx.channel_id != CHANNELS["davebot"]:
         await ctx.respond(
@@ -215,7 +237,7 @@ async def msg(
         embed = discord.Embed(
             title=(
                 f"To {messageable} ({messageable.mention})"
-                if isinstance(messageable, Union[discord.TextChannel, discord.User])
+                if isinstance(messageable, (discord.TextChannel, discord.User))
                 else f"To {messageable}"
             ),
             description=message,
@@ -232,12 +254,12 @@ async def msg(
             icon_url=ctx.user.avatar,
         )
         await asyncio.gather(
-            ctx.guild.get_channel(CHANNELS["davebot"]).send(embed=embed),
+            _channel(dave_bot, CHANNELS["davebot"]).send(embed=embed),
             ctx.respond("Sent", ephemeral=True),
         )
     except discord.ApplicationCommandInvokeError as e:
         await ctx.respond(f"Error:\n{e}", ephemeral=True)
-        raise e
+        raise
 
 
 message_cmds = dave_bot.create_group("message", "Sends messages as bot")
@@ -275,8 +297,8 @@ class VerificationView(discord.ui.View):
             return
 
         await asyncio.gather(
-            self.member.add_roles(interaction.guild.get_role(ROLES["member"])),
-            self.member.remove_roles(interaction.guild.get_role(ROLES["unverified"])),
+            self.member.add_roles(_role(interaction.guild, ROLES["member"])),
+            self.member.remove_roles(_role(interaction.guild, ROLES["unverified"])),
         )
         await asyncio.gather(
             self.member.send(
@@ -285,7 +307,7 @@ class VerificationView(discord.ui.View):
             interaction.response.send_message(
                 str(EMOJIS["thumbsupdirk"]()), ephemeral=True
             ),
-            interaction.guild.get_channel(CHANNELS["modlog"]).send(
+            _channel(dave_bot, CHANNELS["modlog"]).send(
                 f"{interaction.user.mention} verified {self.member.mention} without an intro",
             ),
         )
@@ -293,8 +315,8 @@ class VerificationView(discord.ui.View):
 
 async def _verify(
     ctx: discord.ApplicationContext,
-    member: Union[discord.Member, discord.User],
-    message: Optional[discord.Message] = None,
+    member: discord.Member | discord.User,
+    message: discord.Message | None = None,
 ):
     if member.id == dave_bot.application_id:
         await ctx.respond("You can't verify me!", ephemeral=True)
@@ -317,13 +339,13 @@ async def _verify(
         return
 
     await asyncio.gather(
-        member.add_roles(ctx.guild.get_role(ROLES["member"])),
-        member.remove_roles(ctx.guild.get_role(ROLES["unverified"])),
+        member.add_roles(_role(ctx.guild, ROLES["member"])),
+        member.remove_roles(_role(ctx.guild, ROLES["unverified"])),
     )
     await asyncio.gather(
         member.send("Congratulations, you're now verified! Welcome to the server!"),
         ctx.respond(str(EMOJIS["thumbsupdirk"]()), ephemeral=True),
-        ctx.guild.get_channel(CHANNELS["modlog"]).send(
+        _channel(dave_bot, CHANNELS["modlog"]).send(
             f"{ctx.user.mention} verified {member.mention}",
             embed=msg_embed(message),
         ),
@@ -334,7 +356,7 @@ async def _verify(
 @dave_bot.user_command(name="Verify without intro", guild_ids=[GUILD])
 @staff_only
 async def user_verify(
-    ctx: discord.ApplicationContext, user: Union[discord.Member, discord.User]
+    ctx: discord.ApplicationContext, user: discord.Member | discord.User
 ):
     await _verify(ctx, user)
 
@@ -372,7 +394,7 @@ async def list_unverified(ctx: discord.ApplicationContext):
             queue_total_len = 0
         queue.append(entry)
         queue_total_len += len(entry)
-    if len(queue) > 0:
+    if queue:
         await ctx.respond(
             "\n".join(queue),
             ephemeral=True,
@@ -431,7 +453,7 @@ def run_bot(token: str) -> None:
 
 
 def main() -> None:
-    token = os.getenv("token")
+    token = os.getenv("TOKEN") or os.getenv("token")
     if not isinstance(token, str):
         raise TypeError("No Token")
     logging.basicConfig(level=logging.INFO)
