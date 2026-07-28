@@ -2,35 +2,31 @@
 
 Discord bot for the Calibornia Discord.
 
-This repository now uses `uv` for dependency management.
-
-The `uv.lock` file should be committed for reproducible installs.
+This repository is now a Rust Cargo project using `serenity`.
 
 Current runtime:
 
-- Python 3.14
-- `py-cord`
-- `emoji`
+- Rust 2024 edition
+- `serenity`
+- `tokio`
 
 Setup:
 
-- `uv sync --group dev`
+- Install a current Rust toolchain.
+- Set `DISCORD_TOKEN` in the environment.
 
 Basic commands:
 
-- `uv run python -m py_compile src/calibornia_discord_bot/*.py`
-- `uv run ruff check .`
-- `uv run ruff format --check .`
-- `uv run mypy`
-- `uv run python -m calibornia_discord_bot`
+- `cargo fmt --check`
+- `cargo check`
+- `cargo run`
 
 Run:
 
-- `export TOKEN=...`
-- `uv run python -m calibornia_discord_bot`
+- `export DISCORD_TOKEN=...`
+- `cargo run`
 
 Notes:
 
-- Runtime code now lives under `src/calibornia_discord_bot/`.
-- The bot accepts `TOKEN` and still falls back to the older lowercase `token` environment variable.
-- `pyproject.toml` and `uv.lock` are the source of truth for dependencies.
+- Runtime code lives in `src/main.rs`.
+- The bot reads `DISCORD_TOKEN`, with `TOKEN` kept as a compatibility fallback.

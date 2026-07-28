@@ -1,15 +1,5 @@
-lib/
-secrets.py
-*.pyc
-*.egg-info/
-favicon.ico
-
-# Python caches and virtual environments
-__pycache__/
-.venv/
-
 # Local IDE/project files
 .idea/
 
-# Local bot runtime state
-bot-state.pkl
+# Rust build output
+target/

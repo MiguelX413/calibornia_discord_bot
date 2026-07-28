@@ -1,1 +1,0 @@
-"""Calibornia Discord bot package."""
