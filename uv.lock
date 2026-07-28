@@ -192,7 +192,7 @@ wheels = [
 [[package]]
 name = "calibornia-discord-bot"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "emoji" },
     { name = "py-cord", extra = ["speed"] },

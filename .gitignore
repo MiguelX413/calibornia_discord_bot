@@ -1,6 +1,7 @@
 lib/
 secrets.py
 *.pyc
+*.egg-info/
 favicon.ico
 
 # Python caches and virtual environments

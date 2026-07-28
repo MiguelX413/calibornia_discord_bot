@@ -540,19 +540,19 @@ async def _add_reactions_in_order(
 async def poll(ctx: discord.ApplicationContext, message: discord.Message) -> None:
     await ctx.respond("Removing reactions...", ephemeral=True)
     await _clear_bot_reactions(ctx, message)
-    await ctx.respond("Reacting...", ephemeral=True)
+    await ctx.edit(content="Reacting...")
     await _add_reactions_in_order(
         message,
         _ordered_poll_emojis(message.content, ctx.bot.emojis),
     )
-    await ctx.respond(f"Done {_emoji('thumbsupdirk')}", ephemeral=True)
+    await ctx.edit(content=f"Done {_emoji('thumbsupdirk')}")
 
 
 @dave_bot.message_command(name="Unreact", guild_ids=[GUILD])
 async def unreact(ctx: discord.ApplicationContext, message: discord.Message) -> None:
     await ctx.respond("Removing reactions...", ephemeral=True)
     await _clear_bot_reactions(ctx, message)
-    await ctx.respond(f"Done {_emoji('thumbsupdirk')}", ephemeral=True)
+    await ctx.edit(content=f"Done {_emoji('thumbsupdirk')}")
 
 
 def run_bot(token: str) -> None:
