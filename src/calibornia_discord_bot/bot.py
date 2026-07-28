@@ -10,7 +10,7 @@ from discord.ext.commands import has_any_role
 from discord.utils import format_dt
 from emoji import emoji_list
 
-from config import load_config
+from .config import load_config
 
 GUILD = 980962249550213170
 
