@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env, sync::OnceLock};
+use std::{collections::HashMap, env, ops::Range, sync::OnceLock};
 
 use anyhow::{Context as _, Result, anyhow, ensure};
 use regex::Regex;
@@ -14,7 +14,7 @@ use serenity::{
         ResolvedTarget, ResolvedValue, RoleId, User, UserId, async_trait,
     },
 };
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 const GUILD: GuildId = GuildId::new(980_962_249_550_213_170);
 
@@ -53,6 +53,31 @@ const DEFAULT_JOIN_ROLES: &[RoleId] = &[
     UNVERIFIED,
 ];
 
+const VRISKA_EMOJI: CustomEmoji = CustomEmoji {
+    name: "vriska",
+    id: VRISKA,
+};
+const THUMBSUPDIRK_EMOJI: CustomEmoji = CustomEmoji {
+    name: "thumbsupdirk",
+    id: THUMBSUPDIRK,
+};
+const JOHNDAB_EMOJI: CustomEmoji = CustomEmoji {
+    name: "johndab",
+    id: JOHNDAB,
+};
+const ROSEDAB_EMOJI: CustomEmoji = CustomEmoji {
+    name: "rosedab",
+    id: ROSEDAB,
+};
+const DAVEDAB_EMOJI: CustomEmoji = CustomEmoji {
+    name: "davedab",
+    id: DAVEDAB,
+};
+const JADEDAB_EMOJI: CustomEmoji = CustomEmoji {
+    name: "jadedab",
+    id: JADEDAB,
+};
+
 #[derive(Clone, Copy)]
 struct CustomEmoji {
     name: &'static str,
@@ -74,41 +99,11 @@ impl CustomEmoji {
 }
 
 const EMOJI_TRIGGERS: &[(CustomEmoji, &[&str])] = &[
-    (
-        CustomEmoji {
-            name: "vriska",
-            id: VRISKA,
-        },
-        &["vriska", "serket"],
-    ),
-    (
-        CustomEmoji {
-            name: "johndab",
-            id: JOHNDAB,
-        },
-        &["john", "egbert"],
-    ),
-    (
-        CustomEmoji {
-            name: "rosedab",
-            id: ROSEDAB,
-        },
-        &["rose", "lalonde"],
-    ),
-    (
-        CustomEmoji {
-            name: "davedab",
-            id: DAVEDAB,
-        },
-        &["dave", "strider"],
-    ),
-    (
-        CustomEmoji {
-            name: "jadedab",
-            id: JADEDAB,
-        },
-        &["jade", "harley"],
-    ),
+    (VRISKA_EMOJI, &["vriska", "serket"]),
+    (JOHNDAB_EMOJI, &["john", "egbert"]),
+    (ROSEDAB_EMOJI, &["rose", "lalonde"]),
+    (DAVEDAB_EMOJI, &["dave", "strider"]),
+    (JADEDAB_EMOJI, &["jade", "harley"]),
 ];
 
 struct Config {
@@ -126,20 +121,6 @@ impl Config {
         );
 
         Ok(Self { discord_token })
-    }
-}
-
-fn thumbsupdirk() -> CustomEmoji {
-    CustomEmoji {
-        name: "thumbsupdirk",
-        id: THUMBSUPDIRK,
-    }
-}
-
-fn vriska() -> CustomEmoji {
-    CustomEmoji {
-        name: "vriska",
-        id: VRISKA,
     }
 }
 
@@ -201,68 +182,58 @@ impl EventHandler for Handler {
 
 async fn register_commands(ctx: &Context) -> Result<()> {
     GUILD
-        .set_commands(
-            &ctx.http,
-            vec![
-                CreateCommand::new("message")
-                    .description("Sends messages as bot")
-                    .add_option(
-                        CreateCommandOption::new(
-                            CommandOptionType::SubCommand,
-                            "user",
-                            "Sends a DM as the bot",
-                        )
-                        .add_sub_option(
-                            CreateCommandOption::new(
-                                CommandOptionType::User,
-                                "user",
-                                "Target user",
-                            )
-                            .required(true),
-                        )
-                        .add_sub_option(
-                            CreateCommandOption::new(
-                                CommandOptionType::String,
-                                "message",
-                                "Message",
-                            )
-                            .required(true),
-                        ),
-                    )
-                    .add_option(
-                        CreateCommandOption::new(
-                            CommandOptionType::SubCommand,
-                            "channel",
-                            "Sends a channel message as the bot",
-                        )
-                        .add_sub_option(
-                            CreateCommandOption::new(
-                                CommandOptionType::Channel,
-                                "channel",
-                                "Target channel",
-                            )
-                            .required(true),
-                        )
-                        .add_sub_option(
-                            CreateCommandOption::new(
-                                CommandOptionType::String,
-                                "message",
-                                "Message",
-                            )
-                            .required(true),
-                        ),
-                    ),
-                CreateCommand::new("Verify without intro").kind(CommandType::User),
-                CreateCommand::new("Verify").kind(CommandType::Message),
-                CreateCommand::new("list_unverified").description("Lists unverified members"),
-                CreateCommand::new("member_count").description("The amount of non-bot members."),
-                CreateCommand::new("Poll").kind(CommandType::Message),
-                CreateCommand::new("Unreact").kind(CommandType::Message),
-            ],
-        )
+        .set_commands(&ctx.http, commands())
         .await
         .context("registering commands")?;
     Ok(())
+}
+
+fn commands() -> Vec<CreateCommand> {
+    vec![
+        message_command(),
+        CreateCommand::new("Verify without intro").kind(CommandType::User),
+        CreateCommand::new("Verify").kind(CommandType::Message),
+        CreateCommand::new("list_unverified").description("Lists unverified members"),
+        CreateCommand::new("member_count").description("The amount of non-bot members."),
+        CreateCommand::new("Poll").kind(CommandType::Message),
+        CreateCommand::new("Unreact").kind(CommandType::Message),
+    ]
+}
+
+fn message_command() -> CreateCommand {
+    CreateCommand::new("message")
+        .description("Sends messages as bot")
+        .add_option(message_subcommand(
+            "user",
+            "Sends a DM as the bot",
+            CommandOptionType::User,
+            "user",
+            "Target user",
+        ))
+        .add_option(message_subcommand(
+            "channel",
+            "Sends a channel message as the bot",
+            CommandOptionType::Channel,
+            "channel",
+            "Target channel",
+        ))
+}
+
+fn message_subcommand(
+    name: &'static str,
+    description: &'static str,
+    target_kind: CommandOptionType,
+    target_name: &'static str,
+    target_description: &'static str,
+) -> CreateCommandOption {
+    CreateCommandOption::new(CommandOptionType::SubCommand, name, description)
+        .add_sub_option(
+            CreateCommandOption::new(target_kind, target_name, target_description).required(true),
+        )
+        .add_sub_option(
+            CreateCommandOption::new(CommandOptionType::String, "message", "Message")
+                .required(true),
+        )
 }
 
 async fn forward_dm(ctx: &Context, message: &Message) -> Result<()> {
@@ -290,7 +261,11 @@ async fn forward_dm(ctx: &Context, message: &Message) -> Result<()> {
         .files(files.clone())
         .sticker_ids(sticker_ids);
 
-    if DAVEBOT.send_message(&ctx.http, builder).await.is_err() {
+    if let Err(err) = DAVEBOT.send_message(&ctx.http, builder).await {
+        if message.sticker_items.is_empty() {
+            return Err(err).context("forwarding DM");
+        }
+
         let sticker_list = format!("{:?}", message.sticker_items);
         DAVEBOT
             .send_message(
@@ -303,7 +278,7 @@ async fn forward_dm(ctx: &Context, message: &Message) -> Result<()> {
                     .files(files),
             )
             .await
-            .context("forwarding DM without stickers")?;
+            .with_context(|| format!("forwarding DM without stickers after error: {err}"))?;
     }
 
     Ok(())
@@ -340,7 +315,7 @@ async fn react_to_triggers(ctx: &Context, message: &Message) -> Result<()> {
 }
 
 async fn member_joined(ctx: &Context, member: Member) -> Result<()> {
-    let member_count = non_bot_member_count(ctx);
+    let member_count = non_bot_member_count(ctx)?;
     let welcome_msg = format!(
         "Welcome to hell, {}! We now number {member_count}! Check out <#{}> and <#{}> to get verified and check out <id:customize> to get roles!",
         member.mention(),
@@ -370,19 +345,16 @@ async fn member_joined(ctx: &Context, member: Member) -> Result<()> {
 async fn member_left(
     ctx: &Context,
     user: User,
-    member_data_if_available: Option<Member>,
+    _member_data_if_available: Option<Member>,
 ) -> Result<()> {
-    let count = member_data_if_available
-        .as_ref()
-        .map(|_| non_bot_member_count(ctx))
-        .unwrap_or_else(|| non_bot_member_count(ctx));
+    let count = non_bot_member_count(ctx)?;
 
     GENERAL
         .say(
             &ctx.http,
             format!(
                 "{} {} couldn't bear the torture. Our population lowers to {count}. They'll be back.",
-                vriska().mention(),
+                VRISKA_EMOJI.mention(),
                 user.mention()
             ),
         )
@@ -394,19 +366,27 @@ async fn member_left(
 async fn handle_command(ctx: &Context, command: CommandInteraction) -> Result<()> {
     match command.data.name.as_str() {
         "message" => {
-            ensure_staff(ctx, &command).await?;
+            if !require_staff(ctx, &command).await? {
+                return Ok(());
+            }
             handle_message_command(ctx, &command).await
         }
         "Verify without intro" => {
-            ensure_staff(ctx, &command).await?;
+            if !require_staff(ctx, &command).await? {
+                return Ok(());
+            }
             handle_user_verify(ctx, &command).await
         }
         "Verify" => {
-            ensure_staff(ctx, &command).await?;
+            if !require_staff(ctx, &command).await? {
+                return Ok(());
+            }
             handle_message_verify(ctx, &command).await
         }
         "list_unverified" => {
-            ensure_staff(ctx, &command).await?;
+            if !require_staff(ctx, &command).await? {
+                return Ok(());
+            }
             handle_list_unverified(ctx, &command).await
         }
         "member_count" => handle_member_count(ctx, &command).await,
@@ -416,17 +396,24 @@ async fn handle_command(ctx: &Context, command: CommandInteraction) -> Result<()
     }
 }
 
-async fn ensure_staff(ctx: &Context, command: &CommandInteraction) -> Result<()> {
+async fn require_staff(ctx: &Context, command: &CommandInteraction) -> Result<bool> {
     let Some(guild_id) = command.guild_id else {
         respond_ephemeral(ctx, command, "This command must run in a guild").await?;
-        return Err(anyhow!("staff command used outside guild"));
+        warn!(user = %command.user.id, command = %command.data.name, "staff command used outside guild");
+        return Ok(false);
     };
 
     let member = match &command.member {
         Some(member) => member,
         None => {
             respond_ephemeral(ctx, command, "This command must run in a guild").await?;
-            return Err(anyhow!("missing command member"));
+            warn!(
+                user = %command.user.id,
+                guild = %guild_id,
+                command = %command.data.name,
+                "staff command missing member data"
+            );
+            return Ok(false);
         }
     };
 
@@ -441,14 +428,16 @@ async fn ensure_staff(ctx: &Context, command: &CommandInteraction) -> Result<()>
             "You do not have permission to use this command",
         )
         .await?;
-        return Err(anyhow!(
-            "non-staff user {} attempted command in {}",
-            command.user.id,
-            guild_id
-        ));
+        warn!(
+            user = %command.user.id,
+            guild = %guild_id,
+            command = %command.data.name,
+            "non-staff user attempted staff command"
+        );
+        return Ok(false);
     }
 
-    Ok(())
+    Ok(true)
 }
 
 async fn handle_message_command(ctx: &Context, command: &CommandInteraction) -> Result<()> {
@@ -629,13 +618,6 @@ async fn handle_component(ctx: &Context, component: ComponentInteraction) -> Res
         return Ok(());
     }
 
-    let add_role = member.add_role(&ctx.http, MEMBER);
-    let remove_role = member.remove_role(&ctx.http, UNVERIFIED);
-    let dm = member.user.direct_message(
-        &ctx.http,
-        CreateMessage::new()
-            .content("Congratulations, you're now verified! Welcome to the server!"),
-    );
     let modlog = MODLOG.say(
         &ctx.http,
         format!(
@@ -648,16 +630,14 @@ async fn handle_component(ctx: &Context, component: ComponentInteraction) -> Res
         &ctx.http,
         CreateInteractionResponse::Message(
             CreateInteractionResponseMessage::new()
-                .content(thumbsupdirk().mention())
+                .content(THUMBSUPDIRK_EMOJI.mention())
                 .ephemeral(true),
         ),
     );
 
-    let (add_result, remove_result, dm_result, modlog_result, response_result) =
-        tokio::join!(add_role, remove_role, dm, modlog, response);
-    add_result.context("adding member role")?;
-    remove_result.context("removing unverified role")?;
-    dm_result.context("sending verification DM")?;
+    let (verification_result, modlog_result, response_result) =
+        tokio::join!(apply_verification(ctx, &member), modlog, response);
+    verification_result?;
     modlog_result.context("logging verification")?;
     response_result.context("responding to verification")?;
 
@@ -692,19 +672,12 @@ async fn verify_member(
         return Ok(());
     }
 
-    if intro_message.is_none() {
+    let Some(intro_message) = intro_message else {
         respond_with_verify_button(ctx, command, member.user.id).await?;
         return Ok(());
-    }
+    };
 
-    let add_role = member.add_role(&ctx.http, MEMBER);
-    let remove_role = member.remove_role(&ctx.http, UNVERIFIED);
-    let dm = member.user.direct_message(
-        &ctx.http,
-        CreateMessage::new()
-            .content("Congratulations, you're now verified! Welcome to the server!"),
-    );
-    let verification_response = thumbsupdirk().mention();
+    let verification_response = THUMBSUPDIRK_EMOJI.mention();
     let response = respond_ephemeral(ctx, command, &verification_response);
     let modlog = MODLOG.send_message(
         &ctx.http,
@@ -714,23 +687,33 @@ async fn verify_member(
                 command.user.mention(),
                 member.mention()
             ))
-            .embed(new_message_embed(
-                ctx,
-                intro_message.expect("checked above"),
-            )),
+            .embed(new_message_embed(ctx, intro_message)),
     );
-    let reaction = intro_message
-        .expect("checked above")
-        .react(&ctx.http, thumbsupdirk().reaction());
+    let reaction = intro_message.react(&ctx.http, THUMBSUPDIRK_EMOJI.reaction());
 
-    let (add_result, remove_result, dm_result, response_result, modlog_result, reaction_result) =
-        tokio::join!(add_role, remove_role, dm, response, modlog, reaction);
-    add_result.context("adding member role")?;
-    remove_result.context("removing unverified role")?;
-    dm_result.context("sending verification DM")?;
+    let (verification_result, response_result, modlog_result, reaction_result) =
+        tokio::join!(apply_verification(ctx, &member), response, modlog, reaction);
+    verification_result?;
     response_result.context("responding to verification")?;
     modlog_result.context("logging verification")?;
     reaction_result.context("reacting to intro")?;
+
+    Ok(())
+}
+
+async fn apply_verification(ctx: &Context, member: &Member) -> Result<()> {
+    let add_role = member.add_role(&ctx.http, MEMBER);
+    let remove_role = member.remove_role(&ctx.http, UNVERIFIED);
+    let dm = member.user.direct_message(
+        &ctx.http,
+        CreateMessage::new()
+            .content("Congratulations, you're now verified! Welcome to the server!"),
+    );
+
+    let (add_result, remove_result, dm_result) = tokio::join!(add_role, remove_role, dm);
+    add_result.context("adding member role")?;
+    remove_result.context("removing unverified role")?;
+    dm_result.context("sending verification DM")?;
 
     Ok(())
 }
@@ -770,7 +753,7 @@ async fn handle_list_unverified(ctx: &Context, command: &CommandInteraction) -> 
 }
 
 async fn handle_member_count(ctx: &Context, command: &CommandInteraction) -> Result<()> {
-    let (non_bot, total) = member_counts(ctx);
+    let (non_bot, total) = member_counts(ctx)?;
     respond_ephemeral(
         ctx,
         command,
@@ -800,7 +783,8 @@ async fn handle_poll(ctx: &Context, command: &CommandInteraction) -> Result<()> 
     command
         .edit_response(
             &ctx.http,
-            EditInteractionResponse::new().content(format!("Done {}", thumbsupdirk().mention())),
+            EditInteractionResponse::new()
+                .content(format!("Done {}", THUMBSUPDIRK_EMOJI.mention())),
         )
         .await?;
     Ok(())
@@ -816,7 +800,8 @@ async fn handle_unreact(ctx: &Context, command: &CommandInteraction) -> Result<(
     command
         .edit_response(
             &ctx.http,
-            EditInteractionResponse::new().content(format!("Done {}", thumbsupdirk().mention())),
+            EditInteractionResponse::new()
+                .content(format!("Done {}", THUMBSUPDIRK_EMOJI.mention())),
         )
         .await?;
     Ok(())
@@ -869,21 +854,21 @@ async fn followup_ephemeral(
     Ok(())
 }
 
-fn non_bot_member_count(ctx: &Context) -> usize {
-    member_counts(ctx).0
+fn non_bot_member_count(ctx: &Context) -> Result<usize> {
+    Ok(member_counts(ctx)?.0)
 }
 
-fn member_counts(ctx: &Context) -> (usize, usize) {
-    let Some(guild) = GUILD.to_guild_cached(&ctx.cache) else {
-        return (0, 0);
-    };
+fn member_counts(ctx: &Context) -> Result<(usize, usize)> {
+    let guild = GUILD
+        .to_guild_cached(&ctx.cache)
+        .ok_or_else(|| anyhow!("guild is not cached"))?;
     let total = guild.members.len();
     let non_bot = guild
         .members
         .values()
         .filter(|member| !member.user.bot)
         .count();
-    (non_bot, total)
+    Ok((non_bot, total))
 }
 
 fn triggered_emojis(message: &str) -> Vec<CustomEmoji> {
@@ -904,16 +889,24 @@ fn triggered_emojis(message: &str) -> Vec<CustomEmoji> {
 
 fn ordered_poll_emojis(message: &str) -> Vec<ReactionType> {
     let mut positions: HashMap<String, (usize, ReactionType)> = HashMap::new();
+    let custom_mentions = custom_emoji_mentions(message);
 
-    for (position, emoji_mention) in custom_emoji_mentions(message) {
+    for (range, emoji_mention) in &custom_mentions {
         if let Ok(reaction) = ReactionType::try_from(emoji_mention.as_str()) {
             positions
-                .entry(emoji_mention)
-                .or_insert((position, reaction));
+                .entry(emoji_mention.clone())
+                .or_insert((range.start, reaction));
         }
     }
 
     for (position, emoji) in unicode_emojis(message) {
+        if custom_mentions
+            .iter()
+            .any(|(range, _)| range.contains(&position))
+        {
+            continue;
+        }
+
         positions
             .entry(emoji.clone())
             .or_insert((position, ReactionType::Unicode(emoji)));
@@ -924,14 +917,14 @@ fn ordered_poll_emojis(message: &str) -> Vec<ReactionType> {
     ordered.into_iter().map(|(_, emoji)| emoji).collect()
 }
 
-fn custom_emoji_mentions(message: &str) -> Vec<(usize, String)> {
+fn custom_emoji_mentions(message: &str) -> Vec<(Range<usize>, String)> {
     static CUSTOM_EMOJI_RE: OnceLock<Regex> = OnceLock::new();
     let custom_emoji_re =
         CUSTOM_EMOJI_RE.get_or_init(|| Regex::new(r"<a?:[A-Za-z0-9_]+:[0-9]+>").unwrap());
 
     custom_emoji_re
         .find_iter(message)
-        .map(|found| (found.start(), found.as_str().to_owned()))
+        .map(|found| (found.range(), found.as_str().to_owned()))
         .collect()
 }
 
@@ -939,7 +932,7 @@ fn unicode_emojis(message: &str) -> Vec<(usize, String)> {
     static EMOJI_RE: OnceLock<Regex> = OnceLock::new();
     let emoji_re = EMOJI_RE.get_or_init(|| {
         Regex::new(
-            r"[\p{Emoji_Presentation}\p{Emoji}\u{FE0F}](?:\u{200D}[\p{Emoji_Presentation}\p{Emoji}\u{FE0F}])*",
+            r"(?:\p{Regional_Indicator}{2}|[0-9#*]\u{FE0F}?\u{20E3}|[\p{Emoji_Presentation}\p{Extended_Pictographic}]\u{FE0F}?\p{Emoji_Modifier}?(?:\u{200D}[\p{Emoji_Presentation}\p{Extended_Pictographic}]\u{FE0F}?\p{Emoji_Modifier}?)*)",
         )
         .expect("valid emoji regex")
     });
@@ -1086,10 +1079,75 @@ async fn main() -> Result<()> {
         .init();
 
     let config = Config::from_env()?;
-    let mut client = Client::builder(config.discord_token, GatewayIntents::all())
+    let intents = GatewayIntents::GUILDS
+        | GatewayIntents::GUILD_MEMBERS
+        | GatewayIntents::GUILD_MESSAGES
+        | GatewayIntents::DIRECT_MESSAGES
+        | GatewayIntents::MESSAGE_CONTENT
+        | GatewayIntents::GUILD_MESSAGE_REACTIONS;
+    let mut client = Client::builder(config.discord_token, intents)
         .event_handler(Handler)
         .await
         .context("creating Discord client")?;
 
     client.start().await.context("running Discord client")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn unicode(reaction: &ReactionType) -> Option<&str> {
+        match reaction {
+            ReactionType::Unicode(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn triggered_emojis_follow_first_trigger_position() {
+        let names = triggered_emojis("rose talked to vriska and john")
+            .into_iter()
+            .map(|emoji| emoji.name)
+            .collect::<Vec<_>>();
+
+        assert_eq!(names, vec!["rosedab", "vriska", "johndab"]);
+    }
+
+    #[test]
+    fn poll_emojis_do_not_extract_digits_from_custom_emoji_ids() {
+        let emojis = ordered_poll_emojis("Vote <:foo:123456789012345678> ✅");
+
+        assert_eq!(emojis.len(), 2);
+        assert!(matches!(emojis[0], ReactionType::Custom { .. }));
+        assert_eq!(unicode(&emojis[1]), Some("✅"));
+    }
+
+    #[test]
+    fn poll_emojis_keep_first_occurrence_and_remove_duplicates() {
+        let emojis = ordered_poll_emojis("✅ <:foo:123456789012345678> ✅");
+
+        assert_eq!(emojis.len(), 2);
+        assert_eq!(unicode(&emojis[0]), Some("✅"));
+        assert!(matches!(emojis[1], ReactionType::Custom { .. }));
+    }
+
+    #[test]
+    fn poll_emojis_include_animated_custom_emoji_and_zwj_unicode() {
+        let emojis = ordered_poll_emojis("<a:spin:123456789012345678> 👨‍👩‍👧‍👦");
+
+        assert_eq!(emojis.len(), 2);
+        assert!(matches!(
+            emojis[0],
+            ReactionType::Custom { animated: true, .. }
+        ));
+        assert_eq!(unicode(&emojis[1]), Some("👨‍👩‍👧‍👦"));
+    }
+
+    #[test]
+    fn chunk_lines_respects_limit_between_lines() {
+        let chunks = chunk_lines(vec!["abc".into(), "def".into(), "g".into()], 7);
+
+        assert_eq!(chunks, vec!["abc\ndef", "g"]);
+    }
 }
