@@ -46,11 +46,14 @@ pub(super) async fn handle_list_unverified(
 }
 
 pub(super) async fn handle_member_count(ctx: &Context, command: &CommandInteraction) -> Result<()> {
-    let (non_bot, total) = member_counts(ctx)?;
+    let counts = member_counts(ctx)?;
     respond_ephemeral(
         ctx,
         command,
-        &format!("There are currently {non_bot} non-bot members out of {total} in the server."),
+        &format!(
+            "There are currently {} non-bot members out of {} in the server.",
+            counts.non_bot, counts.total
+        ),
     )
     .await
 }

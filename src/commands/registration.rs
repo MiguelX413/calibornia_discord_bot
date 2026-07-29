@@ -1,7 +1,13 @@
 use anyhow::{Context as _, Result};
 use serenity::all::{CommandOptionType, CommandType, Context, CreateCommand, CreateCommandOption};
 
-use crate::ids::GUILD;
+use crate::{
+    commands::{
+        LIST_UNVERIFIED_COMMAND, MEMBER_COUNT_COMMAND, MESSAGE_COMMAND, POLL_COMMAND,
+        UNREACT_COMMAND, VERIFY_MESSAGE_COMMAND, VERIFY_USER_COMMAND,
+    },
+    ids::GUILD,
+};
 
 pub(crate) async fn register_commands(ctx: &Context) -> Result<()> {
     GUILD
@@ -14,17 +20,17 @@ pub(crate) async fn register_commands(ctx: &Context) -> Result<()> {
 fn commands() -> Vec<CreateCommand> {
     vec![
         message_command(),
-        CreateCommand::new("Verify without intro").kind(CommandType::User),
-        CreateCommand::new("Verify").kind(CommandType::Message),
-        CreateCommand::new("list_unverified").description("Lists unverified members"),
-        CreateCommand::new("member_count").description("The amount of non-bot members."),
-        CreateCommand::new("Poll").kind(CommandType::Message),
-        CreateCommand::new("Unreact").kind(CommandType::Message),
+        CreateCommand::new(VERIFY_USER_COMMAND).kind(CommandType::User),
+        CreateCommand::new(VERIFY_MESSAGE_COMMAND).kind(CommandType::Message),
+        CreateCommand::new(LIST_UNVERIFIED_COMMAND).description("Lists unverified members"),
+        CreateCommand::new(MEMBER_COUNT_COMMAND).description("The amount of non-bot members."),
+        CreateCommand::new(POLL_COMMAND).kind(CommandType::Message),
+        CreateCommand::new(UNREACT_COMMAND).kind(CommandType::Message),
     ]
 }
 
 fn message_command() -> CreateCommand {
-    CreateCommand::new("message")
+    CreateCommand::new(MESSAGE_COMMAND)
         .description("Sends messages as bot")
         .add_option(message_subcommand(
             "user",

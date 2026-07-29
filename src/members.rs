@@ -1,5 +1,6 @@
 use anyhow::{Context as _, Result, anyhow};
 use serenity::all::{Context, Member, Mentionable, User};
+use tracing::warn;
 
 use crate::{
     emoji::VRISKA_EMOJI,
@@ -7,7 +8,7 @@ use crate::{
 };
 
 pub(crate) async fn member_joined(ctx: &Context, member: Member) -> Result<()> {
-    let member_count = non_bot_member_count(ctx)?;
+    let member_count = member_counts(ctx)?.non_bot;
     let welcome_msg = format!(
         "Welcome to hell, {}! We now number {member_count}! Check out <#{}> and <#{}> to get verified and check out <id:customize> to get roles!",
         member.mention(),
@@ -20,17 +21,22 @@ pub(crate) async fn member_joined(ctx: &Context, member: Member) -> Result<()> {
         welcome_msg.clone()
     };
 
-    let send_channel = GENERAL.say(&ctx.http, channel_msg);
-    let send_dm = member.user.direct_message(
-        &ctx.http,
-        serenity::all::CreateMessage::new().content(welcome_msg),
-    );
-    let add_roles = member.add_roles(&ctx.http, DEFAULT_JOIN_ROLES);
+    member
+        .add_roles(&ctx.http, DEFAULT_JOIN_ROLES)
+        .await
+        .context("adding default roles")?;
 
-    let (channel_result, dm_result, roles_result) = tokio::join!(send_channel, send_dm, add_roles);
+    let (channel_result, dm_result) = tokio::join!(
+        GENERAL.say(&ctx.http, channel_msg),
+        member.user.direct_message(
+            &ctx.http,
+            serenity::all::CreateMessage::new().content(welcome_msg),
+        )
+    );
     channel_result.context("sending welcome message")?;
-    dm_result.context("sending welcome DM")?;
-    roles_result.context("adding default roles")?;
+    if let Err(err) = dm_result {
+        warn!(?err, user = %member.user.id, "failed to send welcome DM");
+    }
 
     Ok(())
 }
@@ -40,7 +46,7 @@ pub(crate) async fn member_left(
     user: User,
     _member_data_if_available: Option<Member>,
 ) -> Result<()> {
-    let count = non_bot_member_count(ctx)?;
+    let count = member_counts(ctx)?.non_bot;
 
     GENERAL
         .say(
@@ -56,11 +62,12 @@ pub(crate) async fn member_left(
     Ok(())
 }
 
-pub(crate) fn non_bot_member_count(ctx: &Context) -> Result<usize> {
-    Ok(member_counts(ctx)?.0)
+pub(crate) struct MemberCounts {
+    pub(crate) non_bot: usize,
+    pub(crate) total: usize,
 }
 
-pub(crate) fn member_counts(ctx: &Context) -> Result<(usize, usize)> {
+pub(crate) fn member_counts(ctx: &Context) -> Result<MemberCounts> {
     let guild = GUILD
         .to_guild_cached(&ctx.cache)
         .ok_or_else(|| anyhow!("guild is not cached"))?;
@@ -70,5 +77,5 @@ pub(crate) fn member_counts(ctx: &Context) -> Result<(usize, usize)> {
         .values()
         .filter(|member| !member.user.bot)
         .count();
-    Ok((non_bot, total))
+    Ok(MemberCounts { non_bot, total })
 }

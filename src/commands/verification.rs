@@ -1,41 +1,28 @@
 use anyhow::{Context as _, Result, anyhow};
 use serenity::all::{
     ButtonStyle, CommandInteraction, ComponentInteraction, Context, CreateActionRow, CreateButton,
-    CreateInteractionResponse, CreateInteractionResponseMessage, CreateMessage, Mentionable,
-    Message, ResolvedTarget, UserId,
+    CreateInteractionResponse, CreateInteractionResponseMessage, CreateMessage, GuildId, Member,
+    Mentionable, Message, ResolvedTarget, UserId,
 };
+use tracing::warn;
 
 use crate::{
     embeds::new_message_embed,
     emoji::THUMBSUPDIRK_EMOJI,
     ids::{MEMBER, MODLOG, UNVERIFIED},
-    responses::respond_ephemeral,
+    responses::{respond_component_ephemeral, respond_ephemeral},
 };
+
+const VERIFY_WITHOUT_INTRO_PREFIX: &str = "verify_without_intro:";
 
 pub(super) async fn handle_user_verify(ctx: &Context, command: &CommandInteraction) -> Result<()> {
     let Some(ResolvedTarget::User(user, _partial_member)) = command.data.target() else {
         return Err(anyhow!("verify without intro missing target user"));
     };
 
-    let Some(guild_id) = command.guild_id else {
-        return Err(anyhow!("verification command outside guild"));
-    };
-    let member = match guild_id.member(&ctx.http, user.id).await {
-        Ok(member) => member,
-        Err(_) => {
-            respond_ephemeral(ctx, command, "User no longer in the server").await?;
-            return Ok(());
-        }
-    };
-
-    if member.user.id == ctx.cache.current_user().id {
-        respond_ephemeral(ctx, command, "You can't verify me!").await?;
+    let Some(member) = command_verification_candidate(ctx, command, user.id).await? else {
         return Ok(());
-    }
-    if member.roles.contains(&MEMBER) {
-        respond_ephemeral(ctx, command, "User already verified").await?;
-        return Ok(());
-    }
+    };
 
     respond_with_verify_button(ctx, command, member.user.id).await
 }
@@ -47,7 +34,12 @@ pub(super) async fn handle_message_verify(
     let Some(ResolvedTarget::Message(message)) = command.data.target() else {
         return Err(anyhow!("verify command missing target message"));
     };
-    verify_member(ctx, command, message.author.id, Some(message)).await
+    let Some(member) = command_verification_candidate(ctx, command, message.author.id).await?
+    else {
+        return Ok(());
+    };
+
+    verify_from_intro(ctx, command, &member, message).await
 }
 
 async fn respond_with_verify_button(
@@ -63,7 +55,7 @@ async fn respond_with_verify_button(
                     .content("Are you sure you want to verify this user without an intro?")
                     .ephemeral(true)
                     .components(vec![CreateActionRow::Buttons(vec![
-                        CreateButton::new(format!("verify_without_intro:{}", member_id.get()))
+                        CreateButton::new(verification_component_id(member_id))
                             .label("Verify without intro")
                             .style(ButtonStyle::Primary),
                     ])]),
@@ -75,13 +67,7 @@ async fn respond_with_verify_button(
 }
 
 pub(crate) async fn handle_component(ctx: &Context, component: ComponentInteraction) -> Result<()> {
-    let Some(member_id) = component
-        .data
-        .custom_id
-        .strip_prefix("verify_without_intro:")
-        .and_then(|id| id.parse::<u64>().ok())
-        .map(UserId::new)
-    else {
+    let Some(member_id) = parse_verification_component_id(&component.data.custom_id) else {
         return Ok(());
     };
 
@@ -89,37 +75,26 @@ pub(crate) async fn handle_component(ctx: &Context, component: ComponentInteract
         return Err(anyhow!("verification component outside guild"));
     };
 
-    let member = match guild_id.member(&ctx.http, member_id).await {
-        Ok(member) => member,
-        Err(_) => {
-            component
-                .create_response(
-                    &ctx.http,
-                    CreateInteractionResponse::Message(
-                        CreateInteractionResponseMessage::new()
-                            .content("User no longer in the server")
-                            .ephemeral(true),
-                    ),
-                )
-                .await?;
+    let member = match verification_candidate(ctx, guild_id, member_id).await {
+        VerificationCandidate::Ready(member) => member,
+        VerificationCandidate::Bot => {
+            respond_component_ephemeral(ctx, &component, "You can't verify me!").await?;
+            return Ok(());
+        }
+        VerificationCandidate::AlreadyVerified => {
+            respond_component_ephemeral(ctx, &component, "User already verified").await?;
+            return Ok(());
+        }
+        VerificationCandidate::Missing => {
+            respond_component_ephemeral(ctx, &component, "User no longer in the server").await?;
             return Ok(());
         }
     };
 
-    if member.roles.contains(&MEMBER) {
-        component
-            .create_response(
-                &ctx.http,
-                CreateInteractionResponse::Message(
-                    CreateInteractionResponseMessage::new()
-                        .content("User already verified")
-                        .ephemeral(true),
-                ),
-            )
-            .await?;
-        return Ok(());
-    }
+    apply_verification(ctx, &member).await?;
 
+    let response_text = THUMBSUPDIRK_EMOJI.mention();
+    let response = respond_component_ephemeral(ctx, &component, &response_text);
     let modlog = MODLOG.say(
         &ctx.http,
         format!(
@@ -128,56 +103,83 @@ pub(crate) async fn handle_component(ctx: &Context, component: ComponentInteract
             member.mention()
         ),
     );
-    let response = component.create_response(
-        &ctx.http,
-        CreateInteractionResponse::Message(
-            CreateInteractionResponseMessage::new()
-                .content(THUMBSUPDIRK_EMOJI.mention())
-                .ephemeral(true),
-        ),
-    );
+    let (response_result, modlog_result) = tokio::join!(response, modlog);
 
-    let (verification_result, modlog_result, response_result) =
-        tokio::join!(apply_verification(ctx, &member), modlog, response);
-    verification_result?;
-    modlog_result.context("logging verification")?;
+    if let Err(err) = modlog_result {
+        warn!(?err, user = %member.user.id, "failed to log verification");
+    }
     response_result.context("responding to verification")?;
 
     Ok(())
 }
 
-async fn verify_member(
+enum VerificationCandidate {
+    Ready(Box<Member>),
+    Bot,
+    AlreadyVerified,
+    Missing,
+}
+
+async fn verification_candidate(
+    ctx: &Context,
+    guild_id: GuildId,
+    user_id: UserId,
+) -> VerificationCandidate {
+    if user_id == ctx.cache.current_user().id {
+        return VerificationCandidate::Bot;
+    }
+
+    let Ok(member) = guild_id.member(&ctx.http, user_id).await else {
+        return VerificationCandidate::Missing;
+    };
+
+    if member.roles.contains(&MEMBER) {
+        VerificationCandidate::AlreadyVerified
+    } else {
+        VerificationCandidate::Ready(Box::new(member))
+    }
+}
+
+async fn command_verification_candidate(
     ctx: &Context,
     command: &CommandInteraction,
     user_id: UserId,
-    intro_message: Option<&Message>,
-) -> Result<()> {
+) -> Result<Option<Box<Member>>> {
     let Some(guild_id) = command.guild_id else {
         return Err(anyhow!("verification command outside guild"));
     };
 
-    if user_id == ctx.cache.current_user().id {
-        respond_ephemeral(ctx, command, "You can't verify me!").await?;
-        return Ok(());
-    }
-
-    let member = match guild_id.member(&ctx.http, user_id).await {
-        Ok(member) => member,
-        Err(_) => {
-            respond_ephemeral(ctx, command, "User no longer in the server").await?;
-            return Ok(());
-        }
+    let candidate = verification_candidate(ctx, guild_id, user_id).await;
+    let message = match candidate {
+        VerificationCandidate::Ready(member) => return Ok(Some(member)),
+        VerificationCandidate::Bot => "You can't verify me!",
+        VerificationCandidate::AlreadyVerified => "User already verified",
+        VerificationCandidate::Missing => "User no longer in the server",
     };
 
-    if member.roles.contains(&MEMBER) {
-        respond_ephemeral(ctx, command, "User already verified").await?;
-        return Ok(());
-    }
+    respond_ephemeral(ctx, command, message).await?;
+    Ok(None)
+}
 
-    let Some(intro_message) = intro_message else {
-        respond_with_verify_button(ctx, command, member.user.id).await?;
-        return Ok(());
-    };
+fn verification_component_id(member_id: UserId) -> String {
+    format!("{VERIFY_WITHOUT_INTRO_PREFIX}{}", member_id.get())
+}
+
+fn parse_verification_component_id(custom_id: &str) -> Option<UserId> {
+    custom_id
+        .strip_prefix(VERIFY_WITHOUT_INTRO_PREFIX)?
+        .parse()
+        .ok()
+        .map(UserId::new)
+}
+
+async fn verify_from_intro(
+    ctx: &Context,
+    command: &CommandInteraction,
+    member: &Member,
+    intro_message: &Message,
+) -> Result<()> {
+    apply_verification(ctx, member).await?;
 
     let verification_response = THUMBSUPDIRK_EMOJI.mention();
     let response = respond_ephemeral(ctx, command, &verification_response);
@@ -193,29 +195,40 @@ async fn verify_member(
     );
     let reaction = intro_message.react(&ctx.http, THUMBSUPDIRK_EMOJI.reaction());
 
-    let (verification_result, response_result, modlog_result, reaction_result) =
-        tokio::join!(apply_verification(ctx, &member), response, modlog, reaction);
-    verification_result?;
+    let (response_result, modlog_result, reaction_result) =
+        tokio::join!(response, modlog, reaction);
+    if let Err(err) = modlog_result {
+        warn!(?err, user = %member.user.id, "failed to log verification");
+    }
+    if let Err(err) = reaction_result {
+        warn!(?err, user = %member.user.id, "failed to react to intro");
+    }
     response_result.context("responding to verification")?;
-    modlog_result.context("logging verification")?;
-    reaction_result.context("reacting to intro")?;
 
     Ok(())
 }
 
-async fn apply_verification(ctx: &Context, member: &serenity::all::Member) -> Result<()> {
-    let add_role = member.add_role(&ctx.http, MEMBER);
-    let remove_role = member.remove_role(&ctx.http, UNVERIFIED);
-    let dm = member.user.direct_message(
-        &ctx.http,
-        CreateMessage::new()
-            .content("Congratulations, you're now verified! Welcome to the server!"),
-    );
+async fn apply_verification(ctx: &Context, member: &Member) -> Result<()> {
+    member
+        .add_role(&ctx.http, MEMBER)
+        .await
+        .context("adding member role")?;
+    member
+        .remove_role(&ctx.http, UNVERIFIED)
+        .await
+        .context("removing unverified role")?;
 
-    let (add_result, remove_result, dm_result) = tokio::join!(add_role, remove_role, dm);
-    add_result.context("adding member role")?;
-    remove_result.context("removing unverified role")?;
-    dm_result.context("sending verification DM")?;
+    if let Err(err) = member
+        .user
+        .direct_message(
+            &ctx.http,
+            CreateMessage::new()
+                .content("Congratulations, you're now verified! Welcome to the server!"),
+        )
+        .await
+    {
+        warn!(?err, user = %member.user.id, "failed to send verification DM");
+    }
 
     Ok(())
 }
