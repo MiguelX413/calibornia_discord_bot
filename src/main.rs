@@ -544,7 +544,7 @@ async fn handle_user_verify(ctx: &Context, command: &CommandInteraction) -> Resu
         respond_ephemeral(ctx, command, "You can't verify me!").await?;
         return Ok(());
     }
-    if has_role(&member, MEMBER) {
+    if member.roles.contains(&MEMBER) {
         respond_ephemeral(ctx, command, "User already verified").await?;
         return Ok(());
     }
@@ -615,7 +615,7 @@ async fn handle_component(ctx: &Context, component: ComponentInteraction) -> Res
         }
     };
 
-    if has_role(&member, MEMBER) {
+    if member.roles.contains(&MEMBER) {
         component
             .create_response(
                 &ctx.http,
@@ -687,7 +687,7 @@ async fn verify_member(
         }
     };
 
-    if has_role(&member, MEMBER) {
+    if member.roles.contains(&MEMBER) {
         respond_ephemeral(ctx, command, "User already verified").await?;
         return Ok(());
     }
@@ -743,7 +743,7 @@ async fn handle_list_unverified(ctx: &Context, command: &CommandInteraction) -> 
         let mut members: Vec<_> = guild
             .members
             .values()
-            .filter(|member| !member.user.bot && !has_role(member, MEMBER))
+            .filter(|member| !member.user.bot && !member.roles.contains(&MEMBER))
             .filter_map(|member| member.joined_at.map(|joined| (member.user.id, joined)))
             .collect();
         members.sort_by_key(|(_, joined)| *joined);
@@ -867,10 +867,6 @@ async fn followup_ephemeral(
         .await
         .context("sending ephemeral follow-up")?;
     Ok(())
-}
-
-fn has_role(member: &Member, role_id: RoleId) -> bool {
-    member.roles.contains(&role_id)
 }
 
 fn non_bot_member_count(ctx: &Context) -> usize {
