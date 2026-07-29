@@ -3,13 +3,6 @@ use std::{collections::HashMap, ops::Range, sync::OnceLock};
 use regex::Regex;
 use serenity::all::ReactionType;
 
-const VRISKA: u64 = 1_017_263_376_361_062_490;
-const THUMBSUPDIRK: u64 = 1_016_921_360_674_598_944;
-const JOHNDAB: u64 = 1_023_722_986_332_749_834;
-const ROSEDAB: u64 = 1_023_722_984_680_214_528;
-const DAVEDAB: u64 = 1_023_722_989_298_122_824;
-const JADEDAB: u64 = 1_023_722_987_834_331_156;
-
 #[derive(Clone, Copy)]
 pub(crate) struct CustomEmoji {
     pub(crate) name: &'static str,
@@ -32,27 +25,27 @@ impl CustomEmoji {
 
 pub(crate) const VRISKA_EMOJI: CustomEmoji = CustomEmoji {
     name: "vriska",
-    id: VRISKA,
+    id: 1_017_263_376_361_062_490,
 };
 pub(crate) const THUMBSUPDIRK_EMOJI: CustomEmoji = CustomEmoji {
     name: "thumbsupdirk",
-    id: THUMBSUPDIRK,
+    id: 1_016_921_360_674_598_944,
 };
 const JOHNDAB_EMOJI: CustomEmoji = CustomEmoji {
     name: "johndab",
-    id: JOHNDAB,
+    id: 1_023_722_986_332_749_834,
 };
 const ROSEDAB_EMOJI: CustomEmoji = CustomEmoji {
     name: "rosedab",
-    id: ROSEDAB,
+    id: 1_023_722_984_680_214_528,
 };
 const DAVEDAB_EMOJI: CustomEmoji = CustomEmoji {
     name: "davedab",
-    id: DAVEDAB,
+    id: 1_023_722_989_298_122_824,
 };
 const JADEDAB_EMOJI: CustomEmoji = CustomEmoji {
     name: "jadedab",
-    id: JADEDAB,
+    id: 1_023_722_987_834_331_156,
 };
 
 const EMOJI_TRIGGERS: &[(CustomEmoji, &[&str])] = &[

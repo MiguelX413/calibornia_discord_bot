@@ -18,7 +18,7 @@ use crate::commands::{
     auth::require_staff,
     members::{handle_list_unverified, handle_member_count},
     message::handle_message_command,
-    reactions::{handle_poll, handle_unreact},
+    reactions::handle_reactions,
     verification::{handle_message_verify, handle_user_verify},
 };
 
@@ -41,8 +41,8 @@ pub(crate) async fn handle_command(ctx: &Context, command: CommandInteraction) -
             staff_only(ctx, &command, handle_list_unverified(ctx, &command)).await
         }
         MEMBER_COUNT_COMMAND => handle_member_count(ctx, &command).await,
-        POLL_COMMAND => handle_poll(ctx, &command).await,
-        UNREACT_COMMAND => handle_unreact(ctx, &command).await,
+        POLL_COMMAND => handle_reactions(ctx, &command, true).await,
+        UNREACT_COMMAND => handle_reactions(ctx, &command, false).await,
         _ => Ok(()),
     }
 }

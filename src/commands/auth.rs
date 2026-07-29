@@ -8,24 +8,15 @@ use crate::{
 };
 
 pub(super) async fn require_staff(ctx: &Context, command: &CommandInteraction) -> Result<bool> {
-    let Some(guild_id) = command.guild_id else {
+    let (Some(guild_id), Some(member)) = (command.guild_id, command.member.as_ref()) else {
         respond_ephemeral(ctx, command, "This command must run in a guild").await?;
-        warn!(user = %command.user.id, command = %command.data.name, "staff command used outside guild");
+        warn!(
+            user = %command.user.id,
+            guild = ?command.guild_id,
+            command = %command.data.name,
+            "staff command missing guild or member data"
+        );
         return Ok(false);
-    };
-
-    let member = match &command.member {
-        Some(member) => member,
-        None => {
-            respond_ephemeral(ctx, command, "This command must run in a guild").await?;
-            warn!(
-                user = %command.user.id,
-                guild = %guild_id,
-                command = %command.data.name,
-                "staff command missing member data"
-            );
-            return Ok(false);
-        }
     };
 
     let is_staff = member

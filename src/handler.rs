@@ -17,9 +17,10 @@ impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
         info!("connected as {}", ready.user.tag());
 
-        if let Err(err) = register_commands(&ctx).await {
-            error!(?err, "failed to register guild commands");
-        }
+        log_error(
+            register_commands(&ctx).await,
+            "failed to register guild commands",
+        );
     }
 
     async fn message(&self, ctx: Context, message: Message) {
@@ -27,18 +28,15 @@ impl EventHandler for Handler {
         let react = react_to_triggers(&ctx, &message);
 
         let (forward_result, react_result) = tokio::join!(forward, react);
-        if let Err(err) = forward_result {
-            error!(?err, "failed to forward message");
-        }
-        if let Err(err) = react_result {
-            error!(?err, "failed to react to message");
-        }
+        log_error(forward_result, "failed to forward message");
+        log_error(react_result, "failed to react to message");
     }
 
     async fn guild_member_addition(&self, ctx: Context, member: Member) {
-        if let Err(err) = member_joined(&ctx, member).await {
-            error!(?err, "failed to handle member join");
-        }
+        log_error(
+            member_joined(&ctx, member).await,
+            "failed to handle member join",
+        );
     }
 
     async fn guild_member_removal(
@@ -48,9 +46,10 @@ impl EventHandler for Handler {
         user: User,
         member_data_if_available: Option<Member>,
     ) {
-        if let Err(err) = member_left(&ctx, user, member_data_if_available).await {
-            error!(?err, "failed to handle member removal");
-        }
+        log_error(
+            member_left(&ctx, user, member_data_if_available).await,
+            "failed to handle member removal",
+        );
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
@@ -60,8 +59,12 @@ impl EventHandler for Handler {
             _ => Ok(()),
         };
 
-        if let Err(err) = result {
-            error!(?err, "failed to handle interaction");
-        }
+        log_error(result, "failed to handle interaction");
+    }
+}
+
+fn log_error(result: Result<()>, message: &str) {
+    if let Err(err) = result {
+        error!(?err, "{message}");
     }
 }

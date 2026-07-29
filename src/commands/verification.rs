@@ -76,17 +76,9 @@ pub(crate) async fn handle_component(ctx: &Context, component: ComponentInteract
     };
 
     let member = match verification_candidate(ctx, guild_id, member_id).await {
-        VerificationCandidate::Ready(member) => member,
-        VerificationCandidate::Bot => {
-            respond_component_ephemeral(ctx, &component, "You can't verify me!").await?;
-            return Ok(());
-        }
-        VerificationCandidate::AlreadyVerified => {
-            respond_component_ephemeral(ctx, &component, "User already verified").await?;
-            return Ok(());
-        }
-        VerificationCandidate::Missing => {
-            respond_component_ephemeral(ctx, &component, "User no longer in the server").await?;
+        Ok(member) => member,
+        Err(message) => {
+            respond_component_ephemeral(ctx, &component, message).await?;
             return Ok(());
         }
     };
@@ -113,30 +105,23 @@ pub(crate) async fn handle_component(ctx: &Context, component: ComponentInteract
     Ok(())
 }
 
-enum VerificationCandidate {
-    Ready(Box<Member>),
-    Bot,
-    AlreadyVerified,
-    Missing,
-}
-
 async fn verification_candidate(
     ctx: &Context,
     guild_id: GuildId,
     user_id: UserId,
-) -> VerificationCandidate {
+) -> std::result::Result<Box<Member>, &'static str> {
     if user_id == ctx.cache.current_user().id {
-        return VerificationCandidate::Bot;
+        return Err("You can't verify me!");
     }
 
     let Ok(member) = guild_id.member(&ctx.http, user_id).await else {
-        return VerificationCandidate::Missing;
+        return Err("User no longer in the server");
     };
 
     if member.roles.contains(&MEMBER) {
-        VerificationCandidate::AlreadyVerified
+        Err("User already verified")
     } else {
-        VerificationCandidate::Ready(Box::new(member))
+        Ok(Box::new(member))
     }
 }
 
@@ -149,16 +134,13 @@ async fn command_verification_candidate(
         return Err(anyhow!("verification command outside guild"));
     };
 
-    let candidate = verification_candidate(ctx, guild_id, user_id).await;
-    let message = match candidate {
-        VerificationCandidate::Ready(member) => return Ok(Some(member)),
-        VerificationCandidate::Bot => "You can't verify me!",
-        VerificationCandidate::AlreadyVerified => "User already verified",
-        VerificationCandidate::Missing => "User no longer in the server",
-    };
-
-    respond_ephemeral(ctx, command, message).await?;
-    Ok(None)
+    match verification_candidate(ctx, guild_id, user_id).await {
+        Ok(member) => Ok(Some(member)),
+        Err(message) => {
+            respond_ephemeral(ctx, command, message).await?;
+            Ok(None)
+        }
+    }
 }
 
 fn verification_component_id(member_id: UserId) -> String {

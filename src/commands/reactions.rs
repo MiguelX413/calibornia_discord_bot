@@ -8,41 +8,31 @@ use crate::{
     responses::respond_ephemeral,
 };
 
-pub(super) async fn handle_poll(ctx: &Context, command: &CommandInteraction) -> Result<()> {
+pub(super) async fn handle_reactions(
+    ctx: &Context,
+    command: &CommandInteraction,
+    create_poll: bool,
+) -> Result<()> {
     let Some(ResolvedTarget::Message(message)) = command.data.target() else {
-        return Err(anyhow!("poll command missing target message"));
+        return Err(anyhow!(
+            "{} command missing target message",
+            command.data.name
+        ));
     };
 
     respond_ephemeral(ctx, command, "Removing reactions...").await?;
     clear_bot_reactions(ctx, message).await?;
-    command
-        .edit_response(
-            &ctx.http,
-            EditInteractionResponse::new().content("Reacting..."),
-        )
-        .await?;
-
-    for emoji in ordered_poll_emojis(&message.content) {
-        message.react(&ctx.http, emoji).await?;
+    if create_poll {
+        command
+            .edit_response(
+                &ctx.http,
+                EditInteractionResponse::new().content("Reacting..."),
+            )
+            .await?;
+        for emoji in ordered_poll_emojis(&message.content) {
+            message.react(&ctx.http, emoji).await?;
+        }
     }
-
-    command
-        .edit_response(
-            &ctx.http,
-            EditInteractionResponse::new()
-                .content(format!("Done {}", THUMBSUPDIRK_EMOJI.mention())),
-        )
-        .await?;
-    Ok(())
-}
-
-pub(super) async fn handle_unreact(ctx: &Context, command: &CommandInteraction) -> Result<()> {
-    let Some(ResolvedTarget::Message(message)) = command.data.target() else {
-        return Err(anyhow!("unreact command missing target message"));
-    };
-
-    respond_ephemeral(ctx, command, "Removing reactions...").await?;
-    clear_bot_reactions(ctx, message).await?;
     command
         .edit_response(
             &ctx.http,
