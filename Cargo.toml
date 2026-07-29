@@ -3,7 +3,7 @@ name = "calibornia-discord-bot"
 version = "0.1.0"
 edition = "2024"
 description = "Discord bot for the Calibornia Discord"
-license = "MIT"
+license = "AGPL-3.0-only"
 
 [dependencies]
 anyhow = "1"
