@@ -374,7 +374,7 @@ async fn member_left(
 ) -> Result<()> {
     let count = member_data_if_available
         .as_ref()
-        .map(|member| non_bot_member_count_from_member(ctx, member))
+        .map(|_| non_bot_member_count(ctx))
         .unwrap_or_else(|| non_bot_member_count(ctx));
 
     GENERAL
@@ -877,10 +877,6 @@ fn non_bot_member_count(ctx: &Context) -> usize {
     member_counts(ctx).0
 }
 
-fn non_bot_member_count_from_member(ctx: &Context, _member: &Member) -> usize {
-    non_bot_member_count(ctx)
-}
-
 fn member_counts(ctx: &Context) -> (usize, usize) {
     let Some(guild) = GUILD.to_guild_cached(&ctx.cache) else {
         return (0, 0);
@@ -913,32 +909,11 @@ fn triggered_emojis(message: &str) -> Vec<CustomEmoji> {
 fn ordered_poll_emojis(message: &str) -> Vec<ReactionType> {
     let mut positions: HashMap<String, (usize, ReactionType)> = HashMap::new();
 
-    for emoji in [
-        CustomEmoji {
-            name: "vriska",
-            id: VRISKA,
-        },
-        thumbsupdirk(),
-        CustomEmoji {
-            name: "johndab",
-            id: JOHNDAB,
-        },
-        CustomEmoji {
-            name: "rosedab",
-            id: ROSEDAB,
-        },
-        CustomEmoji {
-            name: "davedab",
-            id: DAVEDAB,
-        },
-        CustomEmoji {
-            name: "jadedab",
-            id: JADEDAB,
-        },
-    ] {
-        let text = emoji.mention();
-        if let Some(position) = message.find(&text) {
-            positions.insert(text, (position, emoji.reaction()));
+    for (position, emoji_mention) in custom_emoji_mentions(message) {
+        if let Ok(reaction) = ReactionType::try_from(emoji_mention.as_str()) {
+            positions
+                .entry(emoji_mention)
+                .or_insert((position, reaction));
         }
     }
 
@@ -951,6 +926,17 @@ fn ordered_poll_emojis(message: &str) -> Vec<ReactionType> {
     let mut ordered = positions.into_values().collect::<Vec<_>>();
     ordered.sort_by_key(|(position, _)| *position);
     ordered.into_iter().map(|(_, emoji)| emoji).collect()
+}
+
+fn custom_emoji_mentions(message: &str) -> Vec<(usize, String)> {
+    static CUSTOM_EMOJI_RE: OnceLock<Regex> = OnceLock::new();
+    let custom_emoji_re =
+        CUSTOM_EMOJI_RE.get_or_init(|| Regex::new(r"<a?:[A-Za-z0-9_]+:[0-9]+>").unwrap());
+
+    custom_emoji_re
+        .find_iter(message)
+        .map(|found| (found.start(), found.as_str().to_owned()))
+        .collect()
 }
 
 fn unicode_emojis(message: &str) -> Vec<(usize, String)> {
