@@ -1,5 +1,6 @@
 use anyhow::{Context as _, Result, anyhow};
 use serenity::all::{Context, Member, Mentionable, User};
+use serenity::futures::StreamExt as _;
 use tracing::warn;
 
 use crate::{
@@ -46,7 +47,13 @@ pub(crate) async fn member_left(
     user: User,
     _member_data_if_available: Option<Member>,
 ) -> Result<()> {
-    let count = member_counts(ctx)?.non_bot;
+    let count = match fetch_member_counts(ctx).await {
+        Ok(counts) => counts.non_bot,
+        Err(err) => {
+            warn!(?err, "failed to fetch current member count; using cache");
+            member_counts(ctx)?.non_bot
+        }
+    };
 
     GENERAL
         .say(
@@ -60,6 +67,24 @@ pub(crate) async fn member_left(
         .await
         .context("sending leave message")?;
     Ok(())
+}
+
+async fn fetch_member_counts(ctx: &Context) -> Result<MemberCounts> {
+    let mut members = GUILD.members_iter(&ctx.http).boxed();
+
+    let mut counts = MemberCounts {
+        non_bot: 0,
+        total: 0,
+    };
+    while let Some(member) = members.next().await {
+        let member = member.context("fetching guild members")?;
+        counts.total += 1;
+        if !member.user.bot {
+            counts.non_bot += 1;
+        }
+    }
+
+    Ok(counts)
 }
 
 pub(crate) struct MemberCounts {
